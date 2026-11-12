@@ -1,19 +1,19 @@
 import { Rng } from '../rng';
-import { type GameMap, type Landmark, type LandmarkKind, type Point, Tile } from './types';
+import { type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, Tile } from './types';
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
 export type MapSize = 'small' | 'medium' | 'large';
 
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
-export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; label: string }> = {
-  small: { cols: 21, rows: 15, checkpoints: 3, label: 'Small' },
-  medium: { cols: 22, rows: 16, checkpoints: 4, label: 'Medium' },
-  large: { cols: 24, rows: 17, checkpoints: 5, label: 'Large' },
+export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; obstacles: number; label: string }> = {
+  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 4, label: 'Small' },
+  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 5, label: 'Medium' },
+  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 6, label: 'Large' },
 };
 
 /** Bumped whenever the generator changes, so saved ghosts never play on a different layout. */
-const GENERATOR_VERSION = 3;
+const GENERATOR_VERSION = 4;
 
 export interface GenerateOptions {
   seed: string;
@@ -24,6 +24,8 @@ export interface GenerateOptions {
   terrainShare?: number;
   /** Number of checkpoints (defaults to the size's own count). */
   checkpoints?: number;
+  /** Number of moving obstacles (defaults to the size's own count). */
+  obstacles?: number;
 }
 
 const PITCH = 3;
@@ -248,6 +250,70 @@ export function generateMap(options: GenerateOptions): GameMap {
     }
   }
 
+  // 7. Moving obstacles, roughly a third of each kind:
+  //    - barriers turn round the landmark in a plaza;
+  //    - boulders roll along straight corridors of 4 to 6 plain cells;
+  //    - gates sit in the openings between two plain corridor cells.
+  // Nothing is placed in the start, finish, checkpoint or terrain cells.
+  const obstacleCount = options.obstacles ?? MAP_SIZES[size].obstacles;
+  const obstacles: Obstacle[] = [];
+  const free = (c: number, r: number) => inGrid(c, r) && !reserved[r * cols + c];
+  const centre = (c: number, r: number) => ({ x: c * PITCH + 2, y: r * PITCH + 2 });
+
+  const barrierCount = Math.min(landmarks.length, Math.round(obstacleCount / 3));
+  for (const mark of rng.shuffle([...landmarks]).slice(0, barrierCount)) {
+    obstacles.push({ kind: 'barrier', x: mark.x, y: mark.y, dir: rng.chance(0.5) ? 1 : -1, phase: rng.next() });
+  }
+
+  const runs: { c: number; r: number; dx: number; dy: number; len: number }[] = [];
+  for (const d of [DIRS[0]!, DIRS[2]!]) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        // Only start a run where the previous cell does not continue it.
+        if (free(c - d.dx, r - d.dy) && isOpenBetween(c - d.dx, r - d.dy, d.dx, d.dy)) continue;
+        let len = 0;
+        while (free(c + d.dx * len, r + d.dy * len) && (len === 0 || isOpenBetween(c + d.dx * (len - 1), r + d.dy * (len - 1), d.dx, d.dy))) len++;
+        if (len >= 4) runs.push({ c, r, dx: d.dx, dy: d.dy, len });
+      }
+    }
+  }
+  const gateCount = Math.round(obstacleCount / 3);
+  const boulderCount = obstacleCount - barrierCount - gateCount;
+  let boulders = 0;
+  for (const run of rng.shuffle(runs)) {
+    if (boulders >= boulderCount) break;
+    const len = Math.min(run.len, 4 + rng.int(3));
+    const skip = rng.int(run.len - len + 1);
+    const c0 = run.c + run.dx * skip;
+    const r0 = run.r + run.dy * skip;
+    let clear = true;
+    for (let n = 0; n < len; n++) if (!free(c0 + run.dx * n, r0 + run.dy * n)) clear = false;
+    if (!clear) continue;
+    const a = centre(c0, r0);
+    const b = centre(c0 + run.dx * (len - 1), r0 + run.dy * (len - 1));
+    obstacles.push({ kind: 'boulder', ax: a.x, ay: a.y, bx: b.x, by: b.y, phase: rng.next() });
+    // Keep other obstacles off the boulder's corridor and the cells beside its ends.
+    reserve(Math.min(c0, c0 + run.dx * (len - 1)) - run.dx, Math.min(r0, r0 + run.dy * (len - 1)) - run.dy,
+      Math.max(c0, c0 + run.dx * (len - 1)) + run.dx, Math.max(r0, r0 + run.dy * (len - 1)) + run.dy);
+    boulders++;
+  }
+
+  const wantedGates = obstacleCount - obstacles.length;
+  for (let attempts = 0, gates = 0; gates < wantedGates && attempts < 400; attempts++) {
+    const c = rng.int(cols);
+    const r = rng.int(rows);
+    const d = rng.pick(DIRS);
+    if (!free(c, r) || !free(c + d.dx, r + d.dy) || !isOpenBetween(c, r, d.dx, d.dy)) continue;
+    obstacles.push(
+      d.dx !== 0
+        ? { kind: 'gate', x: (d.dx > 0 ? c + 1 : c) * PITCH, y: r * PITCH + 1, w: 1, h: 2, phase: rng.next() }
+        : { kind: 'gate', x: c * PITCH + 1, y: (d.dy > 0 ? r + 1 : r) * PITCH, w: 2, h: 1, phase: rng.next() },
+    );
+    reserve(Math.min(c, c + d.dx) - 1, Math.min(r, r + d.dy) - 1, Math.max(c, c + d.dx) + 1, Math.max(r, r + d.dy) + 1);
+    gates++;
+  }
+  base.obstacles = obstacles;
+
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);
   return base;
@@ -281,5 +347,11 @@ export function flipMap(map: GameMap, flipX: boolean, flipY: boolean): GameMap {
     finish: rect(map.finish),
     checkpoints: map.checkpoints.map(rect),
     landmarks: map.landmarks.map((l) => ({ ...l, x: px(l.x), y: py(l.y) })),
+    obstacles: map.obstacles?.map((o): Obstacle => {
+      if (o.kind === 'boulder') return { ...o, ax: px(o.ax), ay: py(o.ay), bx: px(o.bx), by: py(o.by) };
+      // A mirror image turns the other way.
+      if (o.kind === 'barrier') return { ...o, x: px(o.x), y: py(o.y), dir: flipX !== flipY ? (-o.dir as 1 | -1) : o.dir };
+      return { ...o, ...rect(o) };
+    }),
   };
 }

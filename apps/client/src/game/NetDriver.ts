@@ -24,6 +24,9 @@ interface RivalFrame {
   rivals: Map<string, RivalView>;
 }
 
+/** Events the server sends for this runner; the page's own prediction of them is not played. */
+const SERVER_CONFIRMS = new Set<GameEvent['type']>(['obstacleHit', 'hurt', 'respawn', 'effect', 'effectResisted']);
+
 /** Rivals are drawn this many ticks in the past, so there are always two snapshots to blend between. */
 const INTERPOLATION_TICKS = 6;
 
@@ -84,6 +87,7 @@ export class NetDriver implements RaceDriver {
     const dt = 1 / state.config.tickRate;
     state.phase = snapshot.phase;
     state.phaseTime = snapshot.phaseTime;
+    state.tick = snapshot.tick;
     state.deadline = snapshot.deadline;
     state.resumeTime = snapshot.resumeTime;
     this.readyCount = snapshot.readyCount;
@@ -105,6 +109,7 @@ export class NetDriver implements RaceDriver {
       for (const input of this.pending) {
         if (me.finished) break;
         state.raceTicks++;
+        state.tick++;
         state.raceTime = state.raceTicks / state.config.tickRate;
         stepPlayer(state, me, input, dt, discard, true);
       }
@@ -151,6 +156,8 @@ export class NetDriver implements RaceDriver {
     this.accumulator = Math.min(this.accumulator + deltaMs, stepMs * 8);
     while (this.accumulator >= stepMs) {
       this.accumulator -= stepMs;
+      // Obstacles move with this clock; each snapshot sets it back to the server's.
+      state.tick++;
       if (state.phase === 'preview' || state.phase === 'countdown') {
         // Count down smoothly between snapshots; the server decides when the phase ends.
         state.phaseTime = Math.max(0.01, state.phaseTime - dt);
@@ -169,7 +176,10 @@ export class NetDriver implements RaceDriver {
           this.pending.push(input);
           if (this.pending.length > 120) this.pending.splice(0, 60);
           this.connection.send({ t: 'input', ...input });
-          stepPlayer(state, me, input, dt, events, true);
+          // Hits are predicted, so a stun is felt at once, but their sounds wait for the server's word.
+          const predicted: GameEvent[] = [];
+          stepPlayer(state, me, input, dt, predicted, true);
+          for (const event of predicted) if (!SERVER_CONFIRMS.has(event.type)) events.push(event);
         }
       }
     }

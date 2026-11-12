@@ -28,7 +28,15 @@ export function inputVector(input: PlayerInput): { mx: number; my: number; activ
  * Advances one player's velocity, position and facing by `dt`.
  * Returns the speed of the hardest wall impact this tick (0 if none).
  */
-export function movePlayer(map: GameMap, config: GameConfig, p: PlayerState, input: PlayerInput, dt: number): number {
+export function movePlayer(
+  map: GameMap,
+  config: GameConfig,
+  p: PlayerState,
+  input: PlayerInput,
+  dt: number,
+  /** Extra solid tiles, such as closed gates. */
+  blocked: ((tx: number, ty: number) => boolean) | null = null,
+): number {
   const { mx, my, active } = inputVector(input);
   const terrain = TERRAIN[tileAt(map, Math.floor(p.x), Math.floor(p.y))]!;
   const top =
@@ -54,7 +62,7 @@ export function movePlayer(map: GameMap, config: GameConfig, p: PlayerState, inp
   const prevY = p.y;
   p.x += p.vx * dt;
   p.y += p.vy * dt;
-  const impact = resolveWalls(map, p, config.player.radius, prevX, prevY);
+  const impact = resolveWalls(map, p, config.player.radius, prevX, prevY, blocked);
 
   // Facing follows the input direction, smoothed so the view never snaps.
   if (active) {
@@ -76,6 +84,7 @@ export function resolveWalls(
   radius: number,
   prevX: number,
   prevY: number,
+  blocked: ((tx: number, ty: number) => boolean) | null = null,
 ): number {
   let impact = 0;
   for (let pass = 0; pass < 3; pass++) {
@@ -86,7 +95,7 @@ export function resolveWalls(
     const y1 = Math.floor(p.y + radius);
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        if (!isSolid(map, tx, ty)) continue;
+        if (!isSolid(map, tx, ty) && !blocked?.(tx, ty)) continue;
         const nearX = Math.max(tx, Math.min(p.x, tx + 1));
         const nearY = Math.max(ty, Math.min(p.y, ty + 1));
         const dx = p.x - nearX;

@@ -5,12 +5,18 @@ import {
   type GameMap,
   LOSS_OF_CONTROL,
   type Landmark,
+  type Obstacle,
   TERRAIN,
   Tile,
   computeVisibility,
   createAutopilot,
+  barrierAngle,
+  barrierEnds,
+  boulderPosition,
   effectiveVision,
+  gateClosed,
   hasEffect,
+  obstacleTime,
 } from '@cursar/game-core';
 import { EFFECT_STYLE } from './effects';
 import Phaser from 'phaser';
@@ -51,6 +57,10 @@ const COLOR = {
   finishArrow: 0x7ee08a,
   checkpoint: 0xff4f9a,
   checkpointDone: 0x8a93a6,
+  boulder: 0x9b7b5a,
+  boulderEdge: 0x4a3826,
+  barrier: 0xe8b04a,
+  gate: 0xc9d2e3,
 };
 
 /**
@@ -130,6 +140,9 @@ export class RaceScene extends Phaser.Scene {
   private warnedSecond = -1;
   private ghostStride = 0;
   private ghostLast: { x: number; y: number } | null = null;
+  private rumbleTimer = 0;
+  /** Per obstacle: the last quarter turn of a barrier, or whether a gate was closed, for their sounds. */
+  private obstacleMarks = new Map<Obstacle, number>();
   private unsubscribe: (() => void)[] = [];
 
   constructor(data: RaceSceneData) {
@@ -373,6 +386,48 @@ export class RaceScene extends Phaser.Scene {
       }
     }
     this.ghostLast = g;
+
+    this.obstacleAudio(dt);
+  }
+
+  /**
+   * Obstacles are heard before they are seen: boulders rumble (higher while
+   * coming towards you), barriers click at every quarter turn, gates clunk as
+   * they open and close.
+   */
+  private obstacleAudio(dt: number): void {
+    const { state } = this;
+    const { audio, map } = this.data_;
+    const me = this.me();
+    const t = obstacleTime(state);
+    this.rumbleTimer -= dt;
+    const rumble = this.rumbleTimer <= 0;
+    if (rumble) this.rumbleTimer = 0.22;
+    for (const o of map.obstacles ?? []) {
+      if (o.kind === 'boulder') {
+        if (!rumble) continue;
+        const b = boulderPosition(state.config, o, t);
+        const dist = Math.hypot(b.x - me.x, b.y - me.y);
+        if (dist >= 11) continue;
+        const soon = boulderPosition(state.config, o, t + 0.1);
+        const approaching = Math.hypot(soon.x - me.x, soon.y - me.y) < dist;
+        audio.rumble((b.x - me.x) / 6, 1 - dist / 11, approaching);
+      } else if (o.kind === 'barrier') {
+        const quarter = Math.floor((barrierAngle(state.config, o, t) * o.dir) / (Math.PI / 2));
+        const last = this.obstacleMarks.get(o);
+        this.obstacleMarks.set(o, quarter);
+        const dist = Math.hypot(o.x - me.x, o.y - me.y);
+        if (last !== undefined && last !== quarter && dist < 10) audio.barrierClick((o.x - me.x) / 6, 1 - dist / 10);
+      } else {
+        const closed = gateClosed(state.config, o, t) ? 1 : 0;
+        const last = this.obstacleMarks.get(o);
+        this.obstacleMarks.set(o, closed);
+        const gx = o.x + o.w / 2;
+        const gy = o.y + o.h / 2;
+        const dist = Math.hypot(gx - me.x, gy - me.y);
+        if (last !== undefined && last !== closed && dist < 10) audio.gate(closed === 1, (gx - me.x) / 6, 1 - dist / 10);
+      }
+    }
   }
 
   /** Straight-line offset to the nearest untouched checkpoint, or to the finish when none are left. */
@@ -660,6 +715,8 @@ export class RaceScene extends Phaser.Scene {
       }
     }
 
+    this.drawObstacles(g);
+
     // Rivals. In a race the server only sends the ones inside your view.
     const r = state.config.player.radius * PX;
     const zoom = this.cameras.main.zoom;
@@ -745,6 +802,63 @@ export class RaceScene extends Phaser.Scene {
       if (finishArrow) {
         const target = this.objective(px, py);
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
+      }
+    }
+  }
+
+  /**
+   * Moving obstacles. During a race only what is inside your view is drawn:
+   * moving things are never remembered.
+   */
+  private drawObstacles(g: Phaser.GameObjects.Graphics): void {
+    const { state } = this;
+    const { config } = state;
+    const t = obstacleTime(state);
+    for (const o of this.data_.map.obstacles ?? []) {
+      if (o.kind === 'boulder') {
+        const b = boulderPosition(config, o, t);
+        if (!this.isVisibleTile(b.x, b.y)) continue;
+        const r = config.obstacles.boulder.radius * PX;
+        g.fillStyle(COLOR.boulder, 1).fillCircle(b.x * PX, b.y * PX, r);
+        g.lineStyle(3, COLOR.boulderEdge, 1).strokeCircle(b.x * PX, b.y * PX, r);
+        // A groove that turns as it rolls.
+        const along = Math.hypot(b.x - o.ax, b.y - o.ay) / config.obstacles.boulder.radius;
+        const vertical = o.ax === o.bx;
+        const a = vertical ? along : -along;
+        g.lineStyle(3, COLOR.boulderEdge, 0.8).beginPath();
+        g.arc(b.x * PX, b.y * PX, r * 0.6, a, a + Math.PI * 0.8, false).strokePath();
+      } else if (o.kind === 'barrier') {
+        const [a, b] = barrierEnds(config, o, t);
+        const steps = 10;
+        g.lineStyle(config.obstacles.barrier.thickness * PX, COLOR.barrier, 1);
+        for (let i = 0; i < steps; i++) {
+          const x0 = a.x + ((b.x - a.x) * i) / steps;
+          const y0 = a.y + ((b.y - a.y) * i) / steps;
+          const x1 = a.x + ((b.x - a.x) * (i + 1)) / steps;
+          const y1 = a.y + ((b.y - a.y) * (i + 1)) / steps;
+          if (this.isVisibleTile((x0 + x1) / 2, (y0 + y1) / 2)) g.lineBetween(x0 * PX, y0 * PX, x1 * PX, y1 * PX);
+        }
+        if (this.isVisibleTile(o.x, o.y)) g.fillStyle(0x10131a, 1).fillCircle(o.x * PX, o.y * PX, 5);
+      } else {
+        if (!this.isVisibleTile(o.x + 0.5, o.y + 0.5) && !this.isVisibleTile(o.x + o.w - 0.5, o.y + o.h - 0.5)) continue;
+        const x = o.x * PX;
+        const y = o.y * PX;
+        const w = o.w * PX;
+        const h = o.h * PX;
+        if (gateClosed(config, o, t)) {
+          // Closed: bars across the opening.
+          g.fillStyle(0x10131a, 0.55).fillRect(x, y, w, h);
+          g.lineStyle(4, COLOR.gate, 1);
+          const across = o.w < o.h;
+          for (let i = 1; i <= 3; i++) {
+            if (across) g.lineBetween(x, y + (h * i) / 4, x + w, y + (h * i) / 4);
+            else g.lineBetween(x + (w * i) / 4, y, x + (w * i) / 4, y + h);
+          }
+          g.lineStyle(2, COLOR.gate, 1).strokeRect(x + 1, y + 1, w - 2, h - 2);
+        } else {
+          // Open: only the frame shows.
+          g.lineStyle(2, COLOR.gate, 0.45).strokeRect(x + 1, y + 1, w - 2, h - 2);
+        }
       }
     }
   }

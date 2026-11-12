@@ -2,6 +2,7 @@ import { type GameConfig, DEFAULT_CONFIG } from '../config';
 import { type GameMap, inRect, isSolid, tileAt } from '../map/types';
 import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
+import { closedGateCheck, hitObstacles, obstacleTime } from './obstacles';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -63,6 +64,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         respawnX: start.x,
         respawnY: start.y,
         safeTime: 0,
+        hitGuard: 0,
         finished: false,
         finishTime: null,
       };
@@ -211,10 +213,12 @@ export function stepPlayer(
 
   const beforeX = p.x;
   const beforeY = p.y;
-  const impact = movePlayer(map, config, p, input, dt);
+  const impact = movePlayer(map, config, p, input, dt, closedGateCheck(map, config, obstacleTime(state)));
   p.terrain = tileAt(map, Math.floor(p.x), Math.floor(p.y));
   tickEffects(config, p, dt, events);
   p.safeTime = Math.max(0, p.safeTime - dt);
+  p.hitGuard = Math.max(0, p.hitGuard - dt);
+  hitObstacles(state, p, events);
 
   p.bumpCooldown = Math.max(0, p.bumpCooldown - dt);
   if (impact > 2.5 && p.bumpCooldown === 0) {

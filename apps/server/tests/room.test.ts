@@ -544,3 +544,19 @@ describe('health in a network race', () => {
     expect(ben!.last('snap').you.safeTime).toBeGreaterThan(0);
   });
 });
+
+describe('obstacles in a network race', () => {
+  it('tells only the runner who was hit, with the lost heart and the stun', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const state = room.raceState!;
+    const pb = state.players[1]!;
+    state.map.obstacles = [{ kind: 'boulder', ax: pb.x, ay: pb.y, bx: pb.x, by: pb.y, phase: 0 }];
+    ticks(room, 3);
+    const benEvents = ben!.inbox.filter((m) => m.t === 'snap').flatMap((m) => (m.t === 'snap' ? m.events : []));
+    const anaEvents = ana!.inbox.filter((m) => m.t === 'snap').flatMap((m) => (m.t === 'snap' ? m.events : []));
+    expect(benEvents.map((e) => e.type)).toEqual(expect.arrayContaining(['obstacleHit', 'hurt', 'effect']));
+    expect(anaEvents.some((e) => e.type === 'obstacleHit' || e.type === 'hurt')).toBe(false);
+    expect(ben!.last('snap').you.health).toBe(state.config.health.hearts - 1);
+  });
+});

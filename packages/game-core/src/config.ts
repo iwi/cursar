@@ -58,6 +58,20 @@ export interface GameConfig {
     /** Record one sample every N ticks (3 ticks at 60 Hz = 50 ms). */
     sampleEveryTicks: number;
   };
+  /** Moving obstacles. Where they are comes from the map; how they move is set here. */
+  obstacles: {
+    boulder: { radius: number; speed: number };
+    /** `armLength` is from the post to each end of the bar. */
+    barrier: { armLength: number; thickness: number; turnSeconds: number };
+    gate: { openSeconds: number; closedSeconds: number };
+    /** Hearts lost when a boulder or barrier hits you. */
+    hitDamage: number;
+    hitStunSeconds: number;
+    /** Speed you are shoved away at. */
+    knockSpeed: number;
+    /** After a hit, obstacles pass through you for this long, so one cannot hit you twice in a row. */
+    hitGuardSeconds: number;
+  };
   health: {
     /** Hearts a runner starts with, and gets back at each new checkpoint. */
     hearts: number;
@@ -108,6 +122,15 @@ export const DEFAULT_CONFIG: GameConfig = {
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
   ghost: { sampleEveryTicks: 3 },
+  obstacles: {
+    boulder: { radius: 0.9, speed: 3 },
+    barrier: { armLength: 2, thickness: 0.3, turnSeconds: 5 },
+    gate: { openSeconds: 3, closedSeconds: 2.5 },
+    hitDamage: 1,
+    hitStunSeconds: 0.5,
+    knockSpeed: 6,
+    hitGuardSeconds: 1,
+  },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {
     slow: { seconds: 3, speedMul: 0.6 },

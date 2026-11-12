@@ -234,6 +234,26 @@ export class AudioEngine {
     this.tone({ freq: 300, to: 110, dur: 0.7, vol: 0.25, type: 'sawtooth' });
   }
 
+  // --- Obstacles ------------------------------------------------------------
+
+  /** A boulder nearby, panned and louder when closer; higher while it is coming towards you. */
+  rumble(pan: number, closeness: number, approaching: boolean): void {
+    this.noise({ dur: 0.3, freq: approaching ? 140 : 95, filter: 'lowpass', q: 0.7, vol: 0.05 + 0.3 * closeness * closeness, pan, attack: 0.06 });
+  }
+
+  /** A barrier passing a quarter turn: a rhythm you can time. */
+  barrierClick(pan: number, closeness: number): void {
+    this.tone({ freq: 1900, dur: 0.03, vol: 0.04 + 0.16 * closeness, type: 'square', pan });
+    this.noise({ dur: 0.04, freq: 3000, q: 4, vol: 0.03 + 0.1 * closeness, pan });
+  }
+
+  /** A gate opening (rising) or closing (a heavier falling clunk). */
+  gate(closing: boolean, pan: number, closeness: number): void {
+    const vol = 0.05 + 0.25 * closeness;
+    this.noise({ dur: 0.12, freq: closing ? 400 : 700, filter: 'lowpass', vol, pan });
+    this.tone({ freq: closing ? 240 : 180, to: closing ? 120 : 300, dur: 0.18, vol: vol * 0.7, type: 'square', pan });
+  }
+
   // --- Effects --------------------------------------------------------------
 
   /** An effect took hold. Each kind has its own sound, so you know what hit you without reading. */

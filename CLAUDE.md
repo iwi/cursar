@@ -17,7 +17,7 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 ## Layout
 
 - `packages/game-core/` – the game rules in plain TypeScript. No browser, Phaser, DOM or network code here, ever.
-  - `config.ts` every tunable number; `map/` format, seeded generator, validation, route planning; `sim/` movement, collision, stamina, effects, health and respawning, visibility, race phases, autopilot; `replay/` ghosts; `net/protocol.ts` client/server messages and their validation.
+  - `config.ts` every tunable number; `map/` format, seeded generator, validation, route planning; `sim/` movement, collision, stamina, effects, health and respawning, moving obstacles, visibility, race phases, autopilot; `replay/` ghosts; `net/protocol.ts` client/server messages and their validation.
 - `apps/server/` – Node game server. `rooms.ts` holds every room by code (create, join, close when abandoned); `room.ts` is one room (lobby, race loop, per-player visibility filtering, results, series points, computer players, pause/restart/cancel, removing players). Both are transport-free; `index.ts` wires them to WebSockets, applies per-address connection limits and serves `apps/client/dist` plus `/health`. Hosting: Railway, via `Dockerfile` and `railway.json`; see `docs/DEPLOY.md`.
 - `apps/client/` – Vite + React (menus, HUD) + Phaser 3.90 (race rendering).
   - `game/RaceScene.ts` draws and plays sound; it gets everything from a `RaceDriver` (`game/driver.ts`): `LocalDriver` (solo, simulation in the browser) or `NetDriver` (multiplayer: client prediction + reconciliation, rivals interpolated 6 ticks behind).
@@ -36,6 +36,6 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 
 ## Where the project is
 
-Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel) and Phase 2b (rooms with codes, removing players), online on Railway at https://cursarserver-production.up.railway.app. Pushing game changes to `main` redeploys it and closes open rooms. Phase 3 (hazards) has begun: the effect system (`sim/effects.ts`, six effects) and health with checkpoint respawning (`sim/health.ts`, 3 hearts) are built and tried from the solo Tuning panel, but nothing on the maps applies effects or damage yet. Next: dynamic obstacles, traps and enemies. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
+Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel) and Phase 2b (rooms with codes, removing players), online on Railway at https://cursarserver-production.up.railway.app. Pushing game changes to `main` redeploys it and closes open rooms. Phase 3 (hazards) is under way: the effect system (`sim/effects.ts`, six effects), health with checkpoint respawning (`sim/health.ts`, 3 hearts) and moving obstacles (`sim/obstacles.ts`: boulders, barriers, gates, placed by the generator, motion a function of `state.tick`) are built. Next: traps, then enemies. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
 
 The owner writes in British English; keep user-facing text in British English.

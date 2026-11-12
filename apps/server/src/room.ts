@@ -450,7 +450,7 @@ export class Room {
         urgent = true;
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
-      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn') {
+      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit') {
         // Effects and damage come from the server (hazards, traps), so the runner's page cannot predict them.
         const index = state.players.findIndex((p) => p.id === event.playerId);
         const member = race.racers[index];

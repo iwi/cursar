@@ -42,6 +42,22 @@ export interface Landmark extends Point {
   kind: LandmarkKind;
 }
 
+/**
+ * Moving obstacles. Their motion depends only on the race clock (see
+ * `sim/obstacles.ts`), so every page can draw them without being sent their
+ * positions. Speeds and sizes are in `config.obstacles`; the map holds where
+ * they are and where in their cycle they start (`phase`, 0 to 1).
+ */
+export type Obstacle =
+  /** Rolls back and forth between two points along a straight corridor. */
+  | { kind: 'boulder'; ax: number; ay: number; bx: number; by: number; phase: number }
+  /** A bar turning round a post (a plaza's landmark). `dir` 1 turns clockwise on screen. */
+  | { kind: 'barrier'; x: number; y: number; dir: 1 | -1; phase: number }
+  /** Blocks the tiles in its rectangle while closed, on a steady rhythm. */
+  | { kind: 'gate'; x: number; y: number; w: number; h: number; phase: number };
+
+export type ObstacleKind = Obstacle['kind'];
+
 /** Versioned map format shared by the generator, the game and (later) the editor. */
 export interface GameMap {
   schema: 1;
@@ -60,6 +76,8 @@ export interface GameMap {
   checkpoints: Rect[];
   /** Decorative, memorable features used for navigation. */
   landmarks: Landmark[];
+  /** Moving obstacles. Optional, so hand-made maps without them stay valid. */
+  obstacles?: Obstacle[];
   /** Present when the map came from the generator. */
   generator?: { seed: string; size: string };
 }

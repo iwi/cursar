@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { GameMap, Point } from '../map/types';
+import type { GameMap, ObstacleKind, Point } from '../map/types';
 
 /** One tick of player intent. `seq` lets a server acknowledge inputs for client prediction. */
 export interface PlayerInput {
@@ -67,6 +67,8 @@ export interface PlayerState {
   respawnY: number;
   /** Seconds left of the safe time after respawning (no damage, no harmful effects). */
   safeTime: number;
+  /** Seconds left in which obstacles pass through the runner, after being hit by one. */
+  hitGuard: number;
   finished: boolean;
   finishTime: number | null;
 }
@@ -108,6 +110,8 @@ export type GameEvent =
   | { type: 'effectEnd'; playerId: string; kind: EffectKind }
   /** A loss-of-control effect was refused: another was running, or the guard after one was. */
   | { type: 'effectResisted'; playerId: string; kind: EffectKind }
+  /** A boulder or barrier hit the runner (the lost heart and the stun follow as their own events). */
+  | { type: 'obstacleHit'; playerId: string; kind: ObstacleKind }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */

@@ -2,7 +2,7 @@
 
 A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
 
-It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, has begun with effects and health. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, is under way: effects, health and moving obstacles are in. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Run it
 
@@ -68,11 +68,13 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 
 - The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.
 - **Checkpoints** are the pink flags. The finish only counts once you have touched them all; the order is up to you.
+- You have **3 hearts**. A new checkpoint restores them; losing the last sends you back to the last checkpoint you touched.
+- **Moving obstacles**: boulders roll along corridors, barriers turn round some plazas' landmarks, and gates open and close. A boulder or barrier costs a heart and knocks you aside; a closed gate just blocks the way. Watch how they move in the preview, and listen for them in the race.
 - In a solo race, your best run on each map is saved in the browser and races alongside you as a white **ghost**.
 - In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
 - A runner who has finished watches the rest of the race on the full map.
 - After a race the map is revealed with the route each runner took.
-- The **Tuning** button in a race opens live sliders for speed, acceleration, sprint, vision and memory, and for the effects. Its **Effects** buttons put an effect on your runner to try it: Slowed, Haste, Stunned, Reversed, Confused or Blinded, and **Lose a heart** tries health: you have 3 hearts, a new checkpoint restores them, and losing the last sends you back to the last checkpoint you touched (nothing on the maps causes effects or damage yet). Changes apply immediately and last until you reload the page. "Copy values" copies the full configuration so the defaults can be updated.
+- The **Tuning** button in a race opens live sliders for speed, acceleration, sprint, vision and memory, and for the effects. Its **Effects** buttons put an effect on your runner to try it: Slowed, Haste, Stunned, Reversed, Confused or Blinded,, and **Lose a heart** tries health. Changes apply immediately and last until you reload the page. "Copy values" copies the full configuration so the defaults can be updated.
 - Turn the sound on. Footsteps tell you the surface, a heartbeat tells you stamina is low, and your nearest checkpoint (or the open finish) pings when you are close.
 
 `CLAUDE.md` holds working notes for Claude Code: commands, layout and the rules of the codebase.
