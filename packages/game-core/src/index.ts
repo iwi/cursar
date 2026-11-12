@@ -6,6 +6,7 @@ export * from './map/validate';
 export * from './map/route';
 export * from './map/generate';
 export * from './sim/types';
+export * from './sim/effects';
 export * from './sim/movement';
 export * from './sim/visibility';
 export * from './sim/race';

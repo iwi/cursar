@@ -58,6 +58,24 @@ export interface GameConfig {
     /** Record one sample every N ticks (3 ticks at 60 Hz = 50 ms). */
     sampleEveryTicks: number;
   };
+  /**
+   * Temporary effects on a runner, applied by hazards, traps and skills.
+   * `seconds` is how long each lasts unless whatever applies it says otherwise.
+   */
+  effects: {
+    slow: { seconds: number; speedMul: number };
+    haste: { seconds: number; speedMul: number };
+    /** Cannot move at all; the runner slides to a stop. Loss of control. */
+    stun: { seconds: number };
+    /** Controls point the opposite way. Loss of control. */
+    reversed: { seconds: number };
+    /** Controls are turned a quarter turn. Loss of control. */
+    confused: { seconds: number };
+    /** Vision shrinks to this share of its normal size. */
+    blind: { seconds: number; visionMul: number };
+    /** After a loss-of-control effect ends, no new one can start for this long. */
+    controlGuardSeconds: number;
+  };
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -84,6 +102,15 @@ export const DEFAULT_CONFIG: GameConfig = {
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
   ghost: { sampleEveryTicks: 3 },
+  effects: {
+    slow: { seconds: 3, speedMul: 0.6 },
+    haste: { seconds: 4, speedMul: 1.3 },
+    stun: { seconds: 0.8 },
+    reversed: { seconds: 1 },
+    confused: { seconds: 1 },
+    blind: { seconds: 4, visionMul: 0.4 },
+    controlGuardSeconds: 1.5,
+  },
 };
 
 export function cloneConfig(config: GameConfig = DEFAULT_CONFIG): GameConfig {

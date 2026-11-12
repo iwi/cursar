@@ -1,4 +1,4 @@
-import type { RacePhase } from '@cursar/game-core';
+import type { EffectKind, RacePhase } from '@cursar/game-core';
 
 /** What the HUD needs to know, sent from the game scene to the React interface. */
 export interface HudState {
@@ -20,6 +20,8 @@ export interface HudState {
   terrain: string;
   /** The local runner has finished and is watching the others. */
   spectating: boolean;
+  /** Effects on the local runner: seconds left and in all. */
+  effects: { kind: EffectKind; left: number; total: number }[];
   /** Who is ready during the preview (network play only). */
   readiness: { ready: number; total: number; mine: boolean } | null;
 }
@@ -33,6 +35,8 @@ interface BridgeEvents {
   /** Interface to game. */
   skipPreview: undefined;
   setPaused: boolean;
+  /** Tuning panel (solo only): put an effect on the runner to try it. */
+  testEffect: EffectKind;
 }
 
 type Handler<T> = (payload: T) => void;

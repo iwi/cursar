@@ -1,4 +1,17 @@
-import { type GameEvent, type GameMap, type Landmark, TERRAIN, Tile, computeVisibility, createAutopilot } from '@cursar/game-core';
+import {
+  type ActiveEffect,
+  type EffectKind,
+  type GameEvent,
+  type GameMap,
+  LOSS_OF_CONTROL,
+  type Landmark,
+  TERRAIN,
+  Tile,
+  computeVisibility,
+  createAutopilot,
+  effectiveVision,
+} from '@cursar/game-core';
+import { EFFECT_STYLE } from './effects';
 import Phaser from 'phaser';
 import type { AudioEngine } from '../audio/AudioEngine';
 import type { Bridge } from './bridge';
@@ -174,6 +187,7 @@ export class RaceScene extends Phaser.Scene {
     this.unsubscribe.push(
       bridge.on('skipPreview', () => driver.ready()),
       bridge.on('setPaused', (paused) => driver.setPaused(paused)),
+      bridge.on('testEffect', (kind) => driver.testEffect?.(kind)),
     );
     const onBlur = () => driver.setPaused(true);
     window.addEventListener('blur', onBlur);
@@ -286,6 +300,17 @@ export class RaceScene extends Phaser.Scene {
           audio.rivalFinished();
           bridge.emit('notice', `${this.driver.runnerName(event.playerId)} finished${event.place === 1 ? ' first' : ''}`);
         }
+        break;
+      case 'effect':
+        if (event.playerId === me.id) audio.effect(event.kind);
+        break;
+      case 'effectEnd':
+        if (event.playerId === me.id && LOSS_OF_CONTROL.has(event.kind) && !me.effects.some((e) => LOSS_OF_CONTROL.has(e.kind))) {
+          audio.controlBack();
+        }
+        break;
+      case 'effectResisted':
+        if (event.playerId === me.id) audio.resisted();
         break;
       case 'rivalStep':
         audio.rivalStep(event.pan, event.closeness);
@@ -440,7 +465,7 @@ export class RaceScene extends Phaser.Scene {
     const memory = state.config.vision.memorySeconds;
 
     if (racing) {
-      computeVisibility(map, me.x, me.y, me.facing, state.config.vision, visible);
+      computeVisibility(map, me.x, me.y, me.facing, effectiveVision(state.config, me), visible);
       for (let i = 0; i < visible.length; i++) if (visible[i]) seenAt[i] = state.raceTime;
     }
 
@@ -639,6 +664,7 @@ export class RaceScene extends Phaser.Scene {
         true,
       );
       g.lineStyle(2, 0x10131a, 1).strokeCircle(rx, ry, r);
+      this.drawEffects(top, rx, ry, r, rival.fx.map((kind) => ({ kind, time: 1, total: 1 })));
       let label = this.labels.get(rival.id);
       if (!label) {
         label = this.add
@@ -683,6 +709,8 @@ export class RaceScene extends Phaser.Scene {
       top.arc(x, y, r + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * share, false).strokePath();
     }
 
+    if (racing) this.drawEffects(top, x, y, r, me.effects);
+
     // Waypoint flags (the player's own notes, so they show through the fog).
     me.markers.forEach((marker, index) => {
       if (marker.reached) return;
@@ -704,6 +732,24 @@ export class RaceScene extends Phaser.Scene {
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
       }
     }
+  }
+
+  /** A coloured ring per effect round a runner; for your own, the ring shrinks as the effect runs out. */
+  private drawEffects(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, effects: readonly ActiveEffect[]): void {
+    effects.forEach((effect, i) => {
+      const { color } = EFFECT_STYLE[effect.kind as EffectKind];
+      const radius = r + 12 + i * 5;
+      const share = Math.max(0, Math.min(1, effect.time / effect.total));
+      g.lineStyle(3, color, 0.95).beginPath();
+      g.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * share, false).strokePath();
+      if (effect.kind === 'stun') {
+        // Little stars circling the head.
+        for (let k = 0; k < 3; k++) {
+          const a = this.time.now / 150 + (k * Math.PI * 2) / 3;
+          g.fillStyle(color, 1).fillCircle(x + Math.cos(a) * radius, y - r - 6 + Math.sin(a) * 4, 2.5);
+        }
+      }
+    });
   }
 
   private drawArrow(g: Phaser.GameObjects.Graphics, x: number, y: number, dx: number, dy: number, color: number): void {
@@ -734,6 +780,7 @@ export class RaceScene extends Phaser.Scene {
       paused: this.driver.paused,
       terrain: TERRAIN[me.terrain]!.name,
       spectating: state.phase === 'racing' && me.finished,
+      effects: me.effects.map((e) => ({ kind: e.kind, left: e.time, total: e.total })),
       readiness: this.driver.readiness(),
     });
   }

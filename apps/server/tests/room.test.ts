@@ -491,3 +491,42 @@ describe('race', () => {
     expect(room.info().players.map((p) => p.name)).toEqual(['Ana', 'Ben']);
   });
 });
+
+describe('effects in a network race', () => {
+  it('sends a runner its own effects, and shows a rival’s effects only when in view', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const state = room.raceState!;
+    const [pa, pb] = state.players;
+    // Side by side, so each can see the other.
+    pb!.x = pa!.x;
+    pb!.y = pa!.y;
+    pb!.effects.push({ kind: 'slow', time: 2, total: 2 });
+    ticks(room, 3);
+    expect(ben!.last('snap').you.effects.map((e) => e.kind)).toEqual(['slow']);
+    expect(ana!.last('snap').rivals.find((r) => r.id === ben!.id)?.fx).toEqual(['slow']);
+    expect(ben!.last('snap').rivals.find((r) => r.id === ana!.id)?.fx).toBeUndefined();
+  });
+
+  it('a blinded runner is sent fewer of the rivals around them', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const state = room.raceState!;
+    const [pa, pb] = state.players;
+    // Put Ben a few tiles straight ahead of Ana along an open line.
+    const dir = openDirection(state, pa!);
+    pb!.x = pa!.x + dir.mx * 3;
+    pb!.y = pa!.y + dir.my * 3;
+    pa!.facing = Math.atan2(dir.my, dir.mx);
+    ticks(room, 3);
+    expect(ana!.last('snap').rivals.some((r) => r.id === ben!.id)).toBe(true);
+    // Blinded, Ana sees 2 tiles ahead: clearly short of Ben.
+    state.config.effects.blind.visionMul = 0.25;
+    pa!.effects.push({ kind: 'blind', time: 3, total: 3 });
+    pb!.x = pa!.x + dir.mx * 3;
+    pb!.y = pa!.y + dir.my * 3;
+    pa!.facing = Math.atan2(dir.my, dir.mx);
+    ticks(room, 3);
+    expect(ana!.last('snap').rivals.some((r) => r.id === ben!.id)).toBe(false);
+  });
+});

@@ -16,6 +16,17 @@ export interface Marker extends Point {
   reached: boolean;
 }
 
+/** Temporary effects; their strengths and default lengths are in `config.effects`. */
+export type EffectKind = 'slow' | 'haste' | 'stun' | 'reversed' | 'confused' | 'blind';
+
+export interface ActiveEffect {
+  kind: EffectKind;
+  /** Seconds left. */
+  time: number;
+  /** Seconds it lasts in all, for drawing how much is left. */
+  total: number;
+}
+
 export interface Footprint extends Point {
   /** Race time at which it was left. */
   t: number;
@@ -45,6 +56,10 @@ export interface PlayerState {
   checkpoints: boolean[];
   noticeCooldown: number;
   footprints: Footprint[];
+  /** Effects running now, at most one of each kind. */
+  effects: ActiveEffect[];
+  /** Seconds left in which no new loss-of-control effect can start. */
+  controlGuard: number;
   finished: boolean;
   finishTime: number | null;
 }
@@ -81,5 +96,10 @@ export type GameEvent =
   /** The runner reached the finish with checkpoints still to touch. */
   | { type: 'finishLocked'; playerId: string; remaining: number }
   | { type: 'finish'; playerId: string; time: number; place: number }
+  /** An effect took hold (or a running one of the same kind was lengthened). */
+  | { type: 'effect'; playerId: string; kind: EffectKind; seconds: number }
+  | { type: 'effectEnd'; playerId: string; kind: EffectKind }
+  /** A loss-of-control effect was refused: another was running, or the guard after one was. */
+  | { type: 'effectResisted'; playerId: string; kind: EffectKind }
   /** Network play only: a rival's footstep nearby. Direction and loudness, never a position. */
   | { type: 'rivalStep'; pan: number; closeness: number };

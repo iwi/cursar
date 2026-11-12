@@ -16,10 +16,12 @@ import {
   type RoomInfo,
   type RoomStage,
   SNAPSHOT_EVERY_TICKS,
+  type RivalView,
   type SelfState,
   type ServerMessage,
   cloneConfig,
   computeVisibility,
+  effectiveVision,
   createAutopilot,
   createRace,
   generateMap,
@@ -448,6 +450,12 @@ export class Room {
         urgent = true;
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
+      } else if (event.type === 'effect' || event.type === 'effectResisted') {
+        // Effects come from the server (hazards, traps), so the runner's page cannot predict them.
+        const index = state.players.findIndex((p) => p.id === event.playerId);
+        const member = race.racers[index];
+        if (member?.send) member.events.push(event);
+        urgent = true;
       }
       // Everything else concerns one runner only, and that runner's client predicts it.
     }
@@ -487,16 +495,18 @@ export class Room {
       // the race the server only reveals what is inside that runner's view, so
       // a modified client cannot learn where the others are.
       const seeAll = state.phase !== 'racing' || p.finished;
-      if (!seeAll) computeVisibility(map, p.x, p.y, p.facing, state.config.vision, visible);
+      if (!seeAll) computeVisibility(map, p.x, p.y, p.facing, effectiveVision(state.config, p), visible);
       const inView = (x: number, y: number) => seeAll || visible[Math.floor(y) * map.width + Math.floor(x)] === 1;
 
-      const rivals = [];
+      const rivals: RivalView[] = [];
       const prints: number[] = [];
       for (let j = 0; j < state.players.length; j++) {
         if (j === i) continue;
         const other = state.players[j]!;
         if (inView(other.x, other.y)) {
-          rivals.push({ id: other.id, x: round(other.x, 100), y: round(other.y, 100), facing: round(other.facing, 100) });
+          const rival: RivalView = { id: other.id, x: round(other.x, 100), y: round(other.y, 100), facing: round(other.facing, 100) };
+          if (other.effects.length > 0) rival.fx = other.effects.map((e) => e.kind);
+          rivals.push(rival);
         }
         if (seeAll) continue;
         for (const print of other.footprints) {

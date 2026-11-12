@@ -1,10 +1,12 @@
 import {
+  type EffectKind,
   type GameConfig,
   type GameEvent,
   type GameMap,
   type GhostRecording,
   GhostRecorder,
   type RaceState,
+  applyEffect,
   createRace,
   placeMarker,
   removeLastMarker,
@@ -27,6 +29,8 @@ export interface Rival {
   x: number;
   y: number;
   facing: number;
+  /** Effects on this rival, for drawing. */
+  fx: readonly EffectKind[];
 }
 
 export interface Print {
@@ -78,6 +82,8 @@ export interface RaceDriver {
   removeLastMarker(): boolean;
   ready(): void;
   setPaused(paused: boolean): void;
+  /** Solo only: put an effect on the local runner, from the Tuning panel. */
+  testEffect?(kind: EffectKind): void;
   destroy(): void;
 }
 
@@ -101,6 +107,8 @@ export class LocalDriver implements RaceDriver {
   private prevX: number;
   private prevY: number;
   private seq = 0;
+  /** Events from outside the tick (effects tried from the Tuning panel), returned by the next advance. */
+  private queued: GameEvent[] = [];
 
   constructor(
     map: GameMap,
@@ -120,7 +128,8 @@ export class LocalDriver implements RaceDriver {
   }
 
   advance(deltaMs: number, readIntent: () => MoveIntent): GameEvent[] {
-    const events: GameEvent[] = [];
+    const events: GameEvent[] = this.queued;
+    this.queued = [];
     if (this.paused) return events;
     const { state } = this;
     const stepMs = 1000 / state.config.tickRate;
@@ -195,6 +204,10 @@ export class LocalDriver implements RaceDriver {
     const next = this.state.phase === 'finished' ? false : paused;
     if (this.paused && !next) resumeRace(this.state);
     this.paused = next;
+  }
+
+  testEffect(kind: EffectKind): void {
+    if (this.state.phase === 'racing') applyEffect(this.state.config, this.me, kind, this.queued);
   }
 
   destroy(): void {}

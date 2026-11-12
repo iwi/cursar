@@ -1,5 +1,6 @@
-import type { GameConfig } from '@cursar/game-core';
+import { EFFECT_KINDS, type EffectKind, type GameConfig } from '@cursar/game-core';
 import { useState } from 'react';
+import { EFFECT_STYLE, cssColor } from '../game/effects';
 
 interface Slider {
   label: string;
@@ -24,13 +25,52 @@ const SLIDERS: Slider[] = [
   { label: 'Memory (seconds)', min: 0, max: 120, step: 5, get: (c) => c.vision.memorySeconds, set: (c, v) => (c.vision.memorySeconds = v) },
 ];
 
+const EFFECT_SLIDERS: Slider[] = [
+  { label: 'Slowed: speed ×', min: 0.2, max: 0.95, step: 0.05, get: (c) => c.effects.slow.speedMul, set: (c, v) => (c.effects.slow.speedMul = v) },
+  { label: 'Slowed (seconds)', min: 0.5, max: 8, step: 0.5, get: (c) => c.effects.slow.seconds, set: (c, v) => (c.effects.slow.seconds = v) },
+  { label: 'Haste: speed ×', min: 1.05, max: 2, step: 0.05, get: (c) => c.effects.haste.speedMul, set: (c, v) => (c.effects.haste.speedMul = v) },
+  { label: 'Haste (seconds)', min: 0.5, max: 10, step: 0.5, get: (c) => c.effects.haste.seconds, set: (c, v) => (c.effects.haste.seconds = v) },
+  { label: 'Stunned (seconds)', min: 0.2, max: 3, step: 0.1, get: (c) => c.effects.stun.seconds, set: (c, v) => (c.effects.stun.seconds = v) },
+  { label: 'Reversed (seconds)', min: 0.3, max: 4, step: 0.1, get: (c) => c.effects.reversed.seconds, set: (c, v) => (c.effects.reversed.seconds = v) },
+  { label: 'Confused (seconds)', min: 0.3, max: 4, step: 0.1, get: (c) => c.effects.confused.seconds, set: (c, v) => (c.effects.confused.seconds = v) },
+  { label: 'Blinded: vision ×', min: 0.15, max: 0.9, step: 0.05, get: (c) => c.effects.blind.visionMul, set: (c, v) => (c.effects.blind.visionMul = v) },
+  { label: 'Blinded (seconds)', min: 0.5, max: 10, step: 0.5, get: (c) => c.effects.blind.seconds, set: (c, v) => (c.effects.blind.seconds = v) },
+  { label: 'Guard after loss of control (s)', min: 0, max: 4, step: 0.1, get: (c) => c.effects.controlGuardSeconds, set: (c, v) => (c.effects.controlGuardSeconds = v) },
+];
+
 /**
  * Live gameplay tuning. It edits the running race's config object directly, so
  * changes are felt immediately and last until the page is reloaded.
  */
-export function Tuning({ config, onClose }: { config: GameConfig; onClose: () => void }) {
+export function Tuning({
+  config,
+  onClose,
+  onEffect,
+}: {
+  config: GameConfig;
+  onClose: () => void;
+  /** Puts an effect on the runner, to try it during a race. */
+  onEffect: (kind: EffectKind) => void;
+}) {
   const [, refresh] = useState(0);
   const [copied, setCopied] = useState(false);
+  const slider = (s: Slider) => (
+    <label key={s.label}>
+      <span>{s.label}</span>
+      <output>{Math.round(s.get(config) * 100) / 100}</output>
+      <input
+        type="range"
+        min={s.min}
+        max={s.max}
+        step={s.step}
+        value={s.get(config)}
+        onChange={(event) => {
+          s.set(config, Number(event.target.value));
+          refresh((n) => n + 1);
+        }}
+      />
+    </label>
+  );
 
   return (
     <aside className="tuning">
@@ -38,23 +78,24 @@ export function Tuning({ config, onClose }: { config: GameConfig; onClose: () =>
         <strong>Tuning</strong>
         <button type="button" onClick={onClose}>Close</button>
       </header>
-      {SLIDERS.map((slider) => (
-        <label key={slider.label}>
-          <span>{slider.label}</span>
-          <output>{slider.get(config)}</output>
-          <input
-            type="range"
-            min={slider.min}
-            max={slider.max}
-            step={slider.step}
-            value={slider.get(config)}
-            onChange={(event) => {
-              slider.set(config, Number(event.target.value));
-              refresh((n) => n + 1);
-            }}
-          />
-        </label>
-      ))}
+      {SLIDERS.map(slider)}
+      <h3>Effects</h3>
+      <div className="effect-buttons">
+        {EFFECT_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            style={{ borderLeftColor: cssColor(EFFECT_STYLE[kind].color) }}
+            // Keep keyboard focus on the race, so steering carries on after a click.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onEffect(kind)}
+          >
+            {EFFECT_STYLE[kind].label}
+          </button>
+        ))}
+      </div>
+      <small>Try an effect during a race. Stunned, Reversed and Confused cannot follow one another straight away (the guard).</small>
+      {EFFECT_SLIDERS.map(slider)}
       <button
         type="button"
         onClick={() => {

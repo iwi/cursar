@@ -1,5 +1,6 @@
 import { type GameConfig, DEFAULT_CONFIG } from '../config';
 import { type GameMap, inRect, isSolid, tileAt } from '../map/types';
+import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
@@ -56,6 +57,8 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         checkpoints: map.checkpoints.map(() => false),
         noticeCooldown: 0,
         footprints: [],
+        effects: [],
+        controlGuard: 0,
         finished: false,
         finishTime: null,
       };
@@ -179,6 +182,8 @@ export function stepPlayer(
   predict = false,
 ): void {
   const { config, map } = state;
+  // Effects such as stun or reversed controls change what the input does.
+  input = controlledInput(p, input);
   const moving = Math.hypot(input.mx, input.my) > 0.01;
 
   // Stamina: sprinting drains it; running dry locks sprint until it recovers.
@@ -204,6 +209,7 @@ export function stepPlayer(
   const beforeY = p.y;
   const impact = movePlayer(map, config, p, input, dt);
   p.terrain = tileAt(map, Math.floor(p.x), Math.floor(p.y));
+  tickEffects(config, p, dt, events);
 
   p.bumpCooldown = Math.max(0, p.bumpCooldown - dt);
   if (impact > 2.5 && p.bumpCooldown === 0) {
@@ -259,6 +265,7 @@ export function stepPlayer(
     p.finished = true;
     p.finishTime = state.raceTime;
     p.sprinting = false;
+    clearEffects(p);
     if (predict) return;
     const place = state.players.filter((pl) => pl.finished).length;
     events.push({ type: 'finish', playerId: p.id, time: state.raceTime, place });

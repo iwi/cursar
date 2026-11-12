@@ -1,5 +1,6 @@
 import type { GameConfig } from '../config';
 import { type GameMap, TERRAIN, isSolid, tileAt } from '../map/types';
+import { effectSpeedMul } from './effects';
 import type { PlayerInput, PlayerState } from './types';
 
 const TWO_PI = Math.PI * 2;
@@ -30,7 +31,8 @@ export function inputVector(input: PlayerInput): { mx: number; my: number; activ
 export function movePlayer(map: GameMap, config: GameConfig, p: PlayerState, input: PlayerInput, dt: number): number {
   const { mx, my, active } = inputVector(input);
   const terrain = TERRAIN[tileAt(map, Math.floor(p.x), Math.floor(p.y))]!;
-  const top = config.player.maxSpeed * terrain.speedMul * (p.sprinting ? config.sprint.speedMul : 1);
+  const top =
+    config.player.maxSpeed * terrain.speedMul * (p.sprinting ? config.sprint.speedMul : 1) * effectSpeedMul(config, p);
 
   // Steer the velocity toward the wanted velocity. On normal ground this is
   // near-instant; on low-grip terrain it becomes momentum and sliding.

@@ -234,6 +234,47 @@ export class AudioEngine {
     this.tone({ freq: 300, to: 110, dur: 0.7, vol: 0.25, type: 'sawtooth' });
   }
 
+  // --- Effects --------------------------------------------------------------
+
+  /** An effect took hold. Each kind has its own sound, so you know what hit you without reading. */
+  effect(kind: string): void {
+    switch (kind) {
+      case 'slow':
+        this.tone({ freq: 330, to: 165, dur: 0.45, vol: 0.2, type: 'sawtooth' });
+        this.noise({ dur: 0.4, freq: 300, q: 2, vol: 0.12 });
+        break;
+      case 'haste':
+        this.tone({ freq: 440, to: 1320, dur: 0.3, vol: 0.18, type: 'triangle' });
+        break;
+      case 'stun':
+        this.noise({ dur: 0.12, freq: 160, filter: 'lowpass', vol: 0.4 });
+        [1760, 2093, 1760].forEach((freq, i) => this.tone({ freq, dur: 0.12, vol: 0.08, delay: 0.06 + i * 0.09 }));
+        break;
+      case 'reversed':
+        this.tone({ freq: 880, to: 330, dur: 0.18, vol: 0.18, type: 'square' });
+        this.tone({ freq: 330, to: 880, dur: 0.18, vol: 0.14, type: 'square', delay: 0.17 });
+        break;
+      case 'confused':
+        [600, 760, 520, 700].forEach((freq, i) => this.tone({ freq, dur: 0.1, vol: 0.12, type: 'triangle', delay: i * 0.07 }));
+        break;
+      case 'blind':
+        this.noise({ dur: 0.6, freq: 1200, filter: 'lowpass', vol: 0.2, attack: 0.05 });
+        this.tone({ freq: 220, to: 110, dur: 0.6, vol: 0.12 });
+        break;
+    }
+  }
+
+  /** A loss-of-control effect has ended: your controls are your own again. */
+  controlBack(): void {
+    this.tone({ freq: 660, dur: 0.1, vol: 0.14, type: 'triangle' });
+    this.tone({ freq: 990, dur: 0.14, vol: 0.12, type: 'triangle', delay: 0.07 });
+  }
+
+  /** A loss-of-control effect bounced off the guard. */
+  resisted(): void {
+    this.tone({ freq: 1200, to: 1500, dur: 0.12, vol: 0.1, type: 'sine' });
+  }
+
   click(): void {
     this.tone({ freq: 700, dur: 0.05, vol: 0.12, type: 'triangle' });
   }

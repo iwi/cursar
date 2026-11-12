@@ -4,6 +4,7 @@ import { audio } from '../audio/AudioEngine';
 import { Bridge, type HudState } from '../game/bridge';
 import { createGame } from '../game/createGame';
 import type { RaceDriver } from '../game/driver';
+import { EFFECT_STYLE, cssColor } from '../game/effects';
 import { type Settings, formatTime } from '../storage';
 
 interface Props {
@@ -113,6 +114,16 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
 
       {phase === 'racing' && hud && !hud.spectating && (
         <div className="hud-bottom">
+          {hud.effects.length > 0 && (
+            <div className="effects">
+              {hud.effects.map((effect) => (
+                <span key={effect.kind} className="effect" style={{ borderColor: cssColor(EFFECT_STYLE[effect.kind].color) }}>
+                  {EFFECT_STYLE[effect.kind].label}
+                  <i style={{ width: `${Math.round((effect.left / effect.total) * 100)}%`, background: cssColor(EFFECT_STYLE[effect.kind].color) }} />
+                </span>
+              ))}
+            </div>
+          )}
           <div className={hud.exhausted ? 'stamina exhausted' : 'stamina'} aria-label="Stamina">
             <div style={{ width: `${Math.round(hud.stamina * 100)}%` }} />
           </div>

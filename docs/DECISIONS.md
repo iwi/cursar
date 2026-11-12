@@ -30,7 +30,8 @@ Status key: **Built** = in the current project. **Agreed** = decided, not built 
 | Landmarks | The features in the open plazas (fountain, statue, tree, crystal, brazier, obelisk) give the preview things to remember. Maps have 8–10 plazas and only six kinds, so some kinds repeat. Decided 12 November: the shape shows the kind and each plaza has its own colour, so no two plazas on a map share one; a repeated kind gets the colour most unlike its twin ("the red fountain", "the blue fountain"). Drawing only: maps and saved ghosts are unchanged. | Built |
 | Player collision | Runners do not block each other. | Built |
 | Personal difficulty | A personal threat level: enemies prioritise high-threat players and traps trigger more easily for them. Replaces "more enemies for one player". | Agreed |
-| Loss-of-control effects | Reverse controls, confusion and similar last about one second. | Agreed |
+| Effects | Temporary effects on a runner, for hazards, traps and skills to use (decided 12 November). Six kinds: **Slowed** (top speed ×0.6, 3 s), **Haste** (×1.3, 4 s), **Stunned** (cannot move, slides to a stop, 0.8 s), **Reversed** (controls point the opposite way, 1 s), **Confused** (controls turned a quarter turn, 1 s), **Blinded** (vision shrinks to 40%, 4 s; the server also reveals less to a blinded player). The same effect again keeps the longer time rather than stacking; different effects run side by side, and slow and haste multiply. Each has its own sound and colour, a ring round the runner (shrinking as it runs out) and a label above the stamina bar; rivals' effects show when they are in view. All numbers are first guesses, adjustable in the solo Tuning panel, which also has a button per effect to try it. | Built |
+| Loss-of-control effects | Stunned, Reversed and Confused last about one second. They come one at a time: none can start while another is running, and after one ends the runner is guarded for 1.5 s, so a row of traps cannot keep them helpless (decided 12 November). Slowed and Blinded are not limited by the guard. A short cue sounds when control returns, another when the guard turns an effect away. | Built |
 | Series scoring | Cumulative points over a series of 1, 3, 5 or 7 races, a different map each race, with the host starting the next race from the results. Points by place: 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores 0. | Built |
 | Preview in multiplayer | Starts early once every connected runner is ready. Waypoints are private. | Built |
 | Start positions | Rotate from race to race. | Built |
@@ -123,16 +124,16 @@ Agreed for later phases:
 | Ghosts | Position tracks sampled every 50 ms, not input replays. About 25 KB per minute, played back identically anywhere. | Built |
 | Storage | Browser storage for settings and best runs. SQLite waits until profiles and statistics. | Built |
 | Events | The simulation reports what happened (footstep, bump, finish and so on) as events. Audio and effects listen to them. | Built |
-| Effect system | To be built first in Phase 3, before terrain hazards and traps. | Agreed |
-| Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. Online since 12 November at https://cursarserver-production.up.railway.app (a room created, joined from a second browser and raced). | Online |
+| Effect system | `sim/effects.ts`: `applyEffect` starts one (with the stacking and guard rules), effects count down inside `step`, and they change the input (`controlledInput`), top speed (`effectSpeedMul`) and vision (`effectiveVision`). Effects travel with the runner's own state to its page; rivals in view carry a list of their effects' kinds. Nothing on the maps applies them yet: that is the hazards' job. | Built |
+| Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. Online since 12 November at https://cursarserver-production.up.railway.app (tested by the owner with players on different networks: works well). | Online |
 | Phaser version | Phaser 3.90, the final and most widely documented release of version 3. Version 4 exists; because rendering is kept separate from the game rules, moving later affects only `apps/client/src/game`. | Built |
 
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
 2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
-3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Still worth doing: a real game with players on different networks.*
-4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio.
+3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Played from different networks and it works well.*
+4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio. *Effect system built 12 November (six effects, tried from the solo Tuning panel); next: checkpoints as respawn points and health.*
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level.
 6. **Phase 5: map editor.** Using the same map format the generator already produces.
 7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts.
@@ -140,6 +141,7 @@ Agreed for later phases:
 
 ## 6. Open questions
 
+- The effects' strengths and lengths are first guesses: try them from the solo Tuning panel.
 - Computer players' speeds are first guesses set against your times (a flawless run at full speed is about 80 s on a small map).
 
 Settled on 12 November: multiplayer works across real computers on a network; memory time (25 s) and vision ranges stay as they are; the server is hosted on Railway (the Tuning panel in solo mode still changes them live).
