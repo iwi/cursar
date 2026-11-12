@@ -1,0 +1,108 @@
+# Cursar
+
+A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
+
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players on the same network (roadmap Phases 0–2). Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Run it
+
+You need [Node.js](https://nodejs.org) 22.12 or newer (the current LTS release is fine).
+
+```bash
+npm install
+npm start
+```
+
+`npm start` builds the game and starts the game server. It prints two addresses:
+
+- `http://localhost:3000` for the computer running it;
+- `http://<network address>:3000` for everyone else on the same network.
+
+Leave that terminal open while you play; `Ctrl+C` stops the server.
+
+### Playing with friends
+
+1. One person (the host computer) runs `npm start`. Nobody else needs to install anything.
+2. Everyone, including the host, opens the address in a desktop browser and chooses **Play with friends**. The lobby shows the address to share.
+3. Each player picks a name and colour. The first player in is the host: they choose the map size, the number of races in the series and, optionally, a seed, then start.
+4. In the preview, a race starts early once everyone has pressed `Enter`.
+5. After each race the host starts the next one. Points for a place are 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores nothing.
+
+If other computers cannot open the address, the host computer's firewall is the usual cause: allow Node.js to accept incoming connections on private networks (Windows asks about this the first time; on macOS it is under System Settings → Network → Firewall).
+
+The host can add **computer players** in the lobby (Easy, Normal or Hard). They take the best route, so their level is how fast they run. This is also the way to try multiplayer alone.
+
+During a race the host can press `Esc` (or the Pause button) to freeze it for everyone. From the pause panel the host can resume, restart the race on the same map, or cancel it and return everyone to the lobby.
+
+### Working on the code
+
+```bash
+npm run dev
+```
+
+This runs the game server and the page side by side with live reload; open http://localhost:5173.
+
+| Command | What it does |
+|---|---|
+| `npm start` | Builds the game and serves it, with multiplayer, on port 3000. |
+| `npm run dev` | Development mode on port 5173, reloading as files change. |
+| `npm test` | Runs the tests for the game rules and the server. |
+| `npm run typecheck` | Checks the TypeScript. |
+
+To use a different port: `npm run start -w @cursar/server -- --port 8080` (after `npm run build`).
+
+## Play
+
+| Action | Control |
+|---|---|
+| Move | `W` `A` `S` `D` or the arrow keys |
+| Sprint | `Shift` (uses stamina) |
+| Drop a waypoint | Click the map during the preview (up to 3) |
+| Remove the last waypoint | Right-click or `Backspace` during the preview |
+| Start early | `Enter` during the preview |
+| Restart | `R` in solo play; in multiplayer the host restarts from the pause panel |
+| Pause | `Esc` (in multiplayer, the host only: it pauses for everyone) |
+
+- The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.
+- **Checkpoints** are the pink flags. The finish only counts once you have touched them all; the order is up to you.
+- In a solo race, your best run on each map is saved in the browser and races alongside you as a white **ghost**.
+- In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
+- A runner who has finished watches the rest of the race on the full map.
+- After a race the map is revealed with the route each runner took.
+- The **Tuning** button in a race opens live sliders for speed, acceleration, sprint, vision and memory. Changes apply immediately and last until you reload the page. "Copy values" copies the full configuration so the defaults can be updated.
+- Turn the sound on. Footsteps tell you the surface, a heartbeat tells you stamina is low, and your nearest checkpoint (or the open finish) pings when you are close.
+
+`CLAUDE.md` holds working notes for Claude Code: commands, layout and the rules of the codebase.
+
+## How the project is organised
+
+```
+packages/game-core/   The game rules. Plain TypeScript: no browser, Phaser or network code.
+  src/config.ts         Every tunable number.
+  src/map/              Map format, seeded generator, validation.
+  src/sim/              Movement, collision, stamina, visibility, race phases.
+  src/replay/           Ghost recording and playback.
+  src/net/              Messages between page and server, and their validation.
+  tests/                Tests for all of the above.
+apps/client/          The browser application.
+  src/game/             Phaser scene (draws the race), and the two race drivers: local and network.
+  src/net/              Connection to the game server.
+  src/ui/               React: menu, lobby, HUD, results, tuning panel.
+  src/audio/            Synthesised sound cues.
+apps/server/          The game server (Node.js).
+  src/room.ts           Lobby, race loop, what each player may see, results and series points.
+  src/index.ts          WebSocket connections and serving the built page.
+  tests/                Tests for the room.
+docs/DECISIONS.md     What was decided and why.
+```
+
+The important rule: `game-core` never imports from the client or the server. The race advances only through `step(state, inputs)`, so the same rules run in the browser for solo play and on the server for multiplayer.
+
+In multiplayer the server is the only authority. The page moves your own runner immediately using the same rules (prediction) and corrects itself from the server's updates; other runners are drawn a tenth of a second in the past, blended between updates. The server sends each player only the rivals inside that player's view.
+
+## Conventions
+
+- Distances are in tiles, time in seconds, angles in radians. Pixels exist only in the client.
+- Gameplay numbers go in `config.ts`, not in the code that uses them.
+- A new rule comes with a test in `packages/game-core/tests`.
+- The simulation reports what happened as events; sound and visual effects react to events rather than being called from the rules.

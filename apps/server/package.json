@@ -1,0 +1,19 @@
+{
+  "name": "@cursar/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts --port 3001",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@cursar/game-core": "0.1.0",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2"
+  }
+}
