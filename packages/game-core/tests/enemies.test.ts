@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CONFIG, type ChaserState, type EnemySpawn, type GameEvent, type GameMap, MAP_SIZES, type PlayerInput, type TurretState,
-  createAutopilot, createRace, generateMap, hearFoe, inRect, isSolid, patrollerPosition, skipPreview, step,
+  createAutopilot, createRace, generateMap, hearFoe, inRect, isSolid, patrollerPose, patrollerPosition, skipPreview, step,
 } from '../src';
 import { mapFromText } from './helpers';
 
@@ -43,18 +43,27 @@ function run(state: ReturnType<typeof createRace>, inp: PlayerInput, seconds: nu
 }
 
 describe('patrollers', () => {
-  it('walk their beat back and forth on the clock', () => {
-    const e = { kind: 'patroller', ax: 2, ay: 3, bx: 10, by: 3, phase: 0 } as const;
-    const oneWay = 8 / config.enemies.patroller.speed;
-    expect(patrollerPosition(config, e, 0).x).toBeCloseTo(2);
-    expect(patrollerPosition(config, e, oneWay).x).toBeCloseTo(10);
+  it('walk their beat back and forth on the clock, turning its corners', () => {
+    const e = { kind: 'patroller' as const, path: [{ x: 2, y: 3 }, { x: 10, y: 3 }, { x: 10, y: 7 }], phase: 0 };
+    const oneWay = 12 / config.enemies.patroller.speed;
+    expect(patrollerPosition(config, e, 0)).toEqual({ x: 2, y: 3 });
+    const corner = patrollerPosition(config, e, (oneWay * 8) / 12);
+    expect(corner.x).toBeCloseTo(10);
+    expect(corner.y).toBeCloseTo(3);
+    const end = patrollerPose(config, e, oneWay);
+    expect(end.x).toBeCloseTo(10);
+    expect(end.y).toBeCloseTo(7);
+    // Facing the way it walks: right at first, then down, then left on the way back.
+    expect(patrollerPose(config, e, 0.1).heading).toBeCloseTo(0);
+    expect(patrollerPose(config, e, oneWay * 0.9).heading).toBeCloseTo(Math.PI / 2);
+    expect(Math.abs(patrollerPose(config, e, oneWay * 1.5).heading)).toBeCloseTo(Math.PI);
     expect(patrollerPosition(config, e, oneWay * 2).x).toBeCloseTo(2);
   });
 
   it('cost a heart and a shove when touched, without a stun', () => {
     const state = raceWith([]);
     const me = state.players[0]!;
-    state.map.enemies = [{ kind: 'patroller', ax: me.x + 0.3, ay: me.y, bx: me.x + 0.3, by: me.y, phase: 0 }];
+    state.map.enemies = [{ kind: 'patroller', path: [{ x: me.x + 0.3, y: me.y }], phase: 0 }];
     const events = run(state, still, 1 / 60);
     expect(events[0]).toEqual({ type: 'enemyHit', playerId: 'p1', kind: 'patroller' });
     expect(me.health).toBe(config.health.hearts - 1);
@@ -172,7 +181,20 @@ describe('enemies on generated maps', () => {
       const kinds = new Set<string>();
       for (let i = 0; i < 6; i++) {
         const map = generateMap({ seed: `enemies-${i}`, size });
-        expect(map.enemies).toHaveLength(MAP_SIZES[size].enemies);
+        expect(map.enemies).toHaveLength(MAP_SIZES[size].enemies + MAP_SIZES[size].chasers);
+        expect(map.enemies!.filter((e) => e.kind === 'chaser').length).toBeGreaterThanOrEqual(MAP_SIZES[size].chasers);
+        for (const e of map.enemies!) {
+          if (e.kind !== 'patroller') continue;
+          // Every beat turns a corner, and each step is to a neighbouring cell through an opening.
+          expect(e.path.length).toBeGreaterThanOrEqual(4);
+          expect(e.path.some((pt, i) => i >= 2 && pt.x !== e.path[i - 2]!.x && pt.y !== e.path[i - 2]!.y)).toBe(true);
+          for (let i = 1; i < e.path.length; i++) {
+            const a = e.path[i - 1]!;
+            const b = e.path[i]!;
+            expect(Math.abs(a.x - b.x) + Math.abs(a.y - b.y)).toBe(3);
+            for (let k = 0; k <= 6; k++) expect(isSolid(map, Math.floor(a.x + ((b.x - a.x) * k) / 6), Math.floor(a.y + ((b.y - a.y) * k) / 6))).toBe(false);
+          }
+        }
         for (const e of map.enemies!) kinds.add(e.kind);
         expect(generateMap({ seed: `enemies-${i}`, size }).enemies).toEqual(map.enemies);
       }
@@ -186,7 +208,7 @@ describe('enemies on generated maps', () => {
         const map = generateMap({ seed: `enemy-clear-${i}`, size });
         const zones = [map.finish, ...map.checkpoints];
         for (const e of map.enemies!) {
-          const points = e.kind === 'patroller' ? [{ x: e.ax, y: e.ay }, { x: e.bx, y: e.by }] : [{ x: e.x, y: e.y }];
+          const points = e.kind === 'patroller' ? e.path : [{ x: e.x, y: e.y }];
           for (const pt of points) {
             expect(isSolid(map, Math.floor(pt.x), Math.floor(pt.y))).toBe(false);
             expect(zones.some((z) => inRect(z, pt.x, pt.y))).toBe(false);

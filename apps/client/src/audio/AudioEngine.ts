@@ -282,11 +282,15 @@ export class AudioEngine {
     [392, 523, 659, 784].forEach((freq, i) => this.tone({ freq, dur: 0.16, vol: 0.14, type: 'square', delay: i * 0.04 }));
   }
 
-  /** An active skill used. */
-  skillUsed(skill: string): void {
-    if (skill === 'dash') this.noise({ dur: 0.35, freq: 1800, q: 1, vol: 0.2, attack: 0.02 });
-    else if (skill === 'reveal') this.tone({ freq: 880, to: 1760, dur: 0.5, vol: 0.12, type: 'sine' });
-    else this.tone({ freq: 600, to: 300, dur: 0.25, vol: 0.15, type: 'triangle' });
+  /** Reveal showing the hazards round a checkpoint. */
+  reveal(): void {
+    this.tone({ freq: 880, to: 1760, dur: 0.5, vol: 0.12, type: 'sine' });
+  }
+
+  /** Trap sense: a trap underfoot clicked. Get off it! */
+  trapClick(): void {
+    this.tone({ freq: 2400, dur: 0.03, vol: 0.25, type: 'square' });
+    this.tone({ freq: 1800, dur: 0.03, vol: 0.25, type: 'square', delay: 0.07 });
   }
 
   // --- Enemies --------------------------------------------------------------

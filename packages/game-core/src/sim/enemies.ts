@@ -28,14 +28,44 @@ export function createFoes(map: GameMap): (FoeState | null)[] {
   });
 }
 
-/** Where a patroller is: it walks from a to b and back at a steady pace, like a boulder rolls. */
-export function patrollerPosition(config: GameConfig, e: Patroller, t: number): Point {
-  const length = Math.hypot(e.bx - e.ax, e.by - e.ay);
-  const oneWay = Math.max(0.1, length / config.enemies.patroller.speed);
+/** The length of a patroller's beat (tiles). */
+function beatLength(e: Patroller): number {
+  let length = 0;
+  for (let i = 1; i < e.path.length; i++) length += Math.hypot(e.path[i]!.x - e.path[i - 1]!.x, e.path[i]!.y - e.path[i - 1]!.y);
+  return length;
+}
+
+/**
+ * Where a patroller is and which way it faces: it walks its beat to the end
+ * and back at a steady pace, turning the corners on the way.
+ */
+export function patrollerPose(config: GameConfig, e: Patroller, t: number): Point & { heading: number } {
+  const length = beatLength(e);
+  const first = e.path[0]!;
+  if (e.path.length < 2 || length < 1e-6) return { x: first.x, y: first.y, heading: 0 };
+  const oneWay = length / config.enemies.patroller.speed;
   const u = t / (oneWay * 2) + e.phase;
   const v = (u - Math.floor(u)) * 2;
-  const along = v <= 1 ? v : 2 - v;
-  return { x: e.ax + (e.bx - e.ax) * along, y: e.ay + (e.by - e.ay) * along };
+  const back = v > 1;
+  let left = (back ? 2 - v : v) * length;
+  for (let i = 1; i < e.path.length; i++) {
+    const a = e.path[i - 1]!;
+    const b = e.path[i]!;
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (left <= seg || i === e.path.length - 1) {
+      const k = seg > 0 ? Math.min(1, left / seg) : 0;
+      const heading = back ? Math.atan2(a.y - b.y, a.x - b.x) : Math.atan2(b.y - a.y, b.x - a.x);
+      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, heading };
+    }
+    left -= seg;
+  }
+  return { x: first.x, y: first.y, heading: 0 };
+}
+
+/** Where a patroller is at time `t`. */
+export function patrollerPosition(config: GameConfig, e: Patroller, t: number): Point {
+  const { x, y } = patrollerPose(config, e, t);
+  return { x, y };
 }
 
 /** A patroller that will be within `margin` of (x, y) at time `t`, for computer players looking ahead. */
@@ -78,20 +108,19 @@ function quarry(state: RaceState): PlayerState[] {
   return state.players.filter((p) => !p.finished && p.safeTime <= 0);
 }
 
-/** Something an enemy can go after: a runner, or a decoy (id `decoy:<owner>`). */
+/** A runner an enemy can go after. */
 interface Target {
   id: string;
   x: number;
   y: number;
-  player: PlayerState | null;
+  player: PlayerState;
 }
 
 /**
  * What an enemy at (x, y) goes after, among what it can see within range:
- * a decoy first, then the runner with the highest threat, then the nearest.
- * `range` may depend on the runner (null for a decoy).
+ * the runner with the highest threat, then the nearest. `range` may depend on the runner.
  */
-function chooseTarget(state: RaceState, x: number, y: number, range: (p: PlayerState | null) => number): Target | null {
+function chooseTarget(state: RaceState, x: number, y: number, range: (p: PlayerState) => number): Target | null {
   let best: Target | null = null;
   let bestRank = -1;
   let bestDist = Infinity;
@@ -104,18 +133,13 @@ function chooseTarget(state: RaceState, x: number, y: number, range: (p: PlayerS
       bestDist = d;
     }
   };
-  for (const d of state.decoys) consider({ id: `decoy:${d.owner}`, x: d.x, y: d.y, player: null }, Infinity, range(null));
   for (const p of quarry(state)) consider({ id: p.id, x: p.x, y: p.y, player: p }, p.threat, range(p));
   return best;
 }
 
-/** Finds a target again by id, or null if it is gone (finished, safe, or a decoy that ran out). */
+/** Finds a target again by id, or null if it is gone (finished or safe). */
 function findTarget(state: RaceState, id: string | null): Target | null {
   if (!id) return null;
-  if (id.startsWith('decoy:')) {
-    const d = state.decoys.find((dec) => `decoy:${dec.owner}` === id);
-    return d ? { id, x: d.x, y: d.y, player: null } : null;
-  }
   const p = quarry(state).find((pl) => pl.id === id);
   return p ? { id, x: p.x, y: p.y, player: p } : null;
 }
@@ -161,7 +185,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
     // Still resting after a catch: it does not wake yet.
     c.timer = Math.max(0, c.timer - dt);
     if (c.timer > 0) return;
-    const prey = chooseTarget(state, c.x, c.y, (p) => (p ? wakeRange(config, p) : cfg.sightRange));
+    const prey = chooseTarget(state, c.x, c.y, (p) => wakeRange(config, p));
     if (prey) {
       c.mode = 'chase';
       c.target = prey.id;
@@ -201,11 +225,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
     // Caught: a heart and a stun, then it rests and walks home.
     const reach = cfg.radius + config.player.radius;
     const gap = Math.hypot(prey.x - c.x, prey.y - c.y);
-    if (gap < reach && !prey.player) {
-      // A decoy: it pops, and the fooled chaser rests and goes home, which gives the runner time to get away.
-      state.decoys = state.decoys.filter((d) => `decoy:${d.owner}` !== prey.id);
-      goHome(c, cfg.restSeconds);
-    } else if (gap < reach && prey.player && prey.player.hitGuard <= 0) {
+    if (gap < reach && prey.player.hitGuard <= 0) {
       const nx = gap > 1e-6 ? (prey.x - c.x) / gap : Math.cos(c.facing);
       const ny = gap > 1e-6 ? (prey.y - c.y) / gap : Math.sin(c.facing);
       events.push({ type: 'enemyHit', playerId: prey.id, kind: 'chaser' });
@@ -218,7 +238,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
   // Returning: walk home along the shortest way; once rested, a runner in sight wakes it again.
   c.timer -= dt;
   if (c.timer <= 0) {
-    const prey = chooseTarget(state, c.x, c.y, (p) => (p ? wakeRange(config, p) : cfg.sightRange));
+    const prey = chooseTarget(state, c.x, c.y, (p) => wakeRange(config, p));
     if (prey) {
       c.mode = 'chase';
       c.target = prey.id;
@@ -317,11 +337,8 @@ function stepBolts(state: RaceState, dt: number, events: GameEvent[]): void {
   });
 }
 
-/** Counts down decoys, moves chasers, turns and fires turrets, and flies bolts: one tick, during the race only. */
+/** Moves chasers, turns and fires turrets, and flies bolts: one tick, during the race only. */
 export function stepEnemies(state: RaceState, dt: number, events: GameEvent[]): void {
-  // Decoys run out.
-  for (const d of state.decoys) d.time -= dt;
-  state.decoys = state.decoys.filter((d) => d.time > 0);
   const spawns = state.map.enemies;
   if (!spawns || spawns.length === 0) return;
   spawns.forEach((spawn, index) => {

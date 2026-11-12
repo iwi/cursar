@@ -101,7 +101,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
             <tr><th>Waypoints</th><td>Click the map during the preview (up to {DEFAULT_CONFIG.markers.max})</td></tr>
             <tr><th>Start early</th><td><kbd>Enter</kbd> during the preview</td></tr>
             <tr><th>Full map</th><td><kbd>M</kbd> during the race (you stand still while it is open)</td></tr>
-            <tr><th>Skills</th><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> take a card at a checkpoint; <kbd>Q</kbd> <kbd>E</kbd> <kbd>F</kbd> use one</td></tr>
+            <tr><th>Skills</th><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> take a card at a checkpoint</td></tr>
             <tr><th>Restart / pause</th><td><kbd>R</kbd> / <kbd>Esc</kbd></td></tr>
           </tbody>
         </table>

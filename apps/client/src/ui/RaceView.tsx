@@ -151,16 +151,6 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
               ))}
             </div>
           )}
-          {hud.actives.length > 0 && (
-            <div className="actives">
-              {hud.actives.map((a) => (
-                <span key={a.id} className={a.cooldown > 0 ? 'active-skill cooling' : 'active-skill'}>
-                  <kbd>{a.key}</kbd> {a.name}
-                  {a.cooldown > 0 && <em> {Math.ceil(a.cooldown)}s</em>}
-                </span>
-              ))}
-            </div>
-          )}
           <div className="hearts" aria-label={`${hud.health} of ${hud.healthMax} hearts`}>
             {Array.from({ length: hud.healthMax }, (_, i) => (
               <i key={i} className={i < hud.health ? 'full' : ''}>♥</i>

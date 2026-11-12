@@ -6,7 +6,7 @@ import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstac
 import { springTraps } from './traps';
 import { createFoes, hitPatrollers, stepEnemies } from './enemies';
 import { maxHearts } from './health';
-import { offerSkills, tickSkills, useSkill } from './skills';
+import { hasSkill, offerSkills, tickSkills } from './skills';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -42,7 +42,6 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
     foes: createFoes(map),
     bolts: [],
     nextBoltId: 1,
-    decoys: [],
     players: players.map((setup, i): PlayerState => {
       const start = map.startPositions[setup.slot ?? i];
       if (!start) throw new Error(`No start position for slot ${setup.slot ?? i}.`);
@@ -80,9 +79,8 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         threat: 0,
         offer: null,
         offersMade: 0,
-        cooldowns: {},
-        dashTime: 0,
         revealTime: 0,
+        trapClick: null,
         finished: false,
         finishTime: null,
       };
@@ -208,7 +206,6 @@ export function stepPlayer(
 ): void {
   const { config, map } = state;
   tickSkills(p, dt);
-  if (input.use) useSkill(state, p, input.use, events);
   // Effects such as stun or reversed controls change what the input does.
   input = controlledInput(p, input);
   const moving = Math.hypot(input.mx, input.my) > 0.01;
@@ -284,6 +281,8 @@ export function stepPlayer(
       p.health = maxHearts(config, p);
       p.respawnX = zone.x + zone.w / 2;
       p.respawnY = zone.y + zone.h / 2;
+      // Reveal: the hazards round a new checkpoint show for a moment.
+      if (hasSkill(p, 'reveal')) p.revealTime = config.skills.reveal.seconds;
     } else {
       remaining++;
     }

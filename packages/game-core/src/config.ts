@@ -128,18 +128,14 @@ export interface GameConfig {
   };
   /** Skill strengths; the deck itself (costs, threat) is `SKILLS` in sim/skills.ts. */
   skills: {
-    navigationMemorySeconds: number;
-    trapSenseReveal: number;
-    trapSenseTell: number;
-    wideEyesMul: number;
-    fleetFootSpeedMul: number;
+    /** Trap sense: a trap stepped on springs only if the runner is still on it after this long (seconds). */
+    trapSenseDelaySeconds: number;
     deepLungsDrainMul: number;
     deepLungsRegenMul: number;
     /** Steady multiplies how long loss of control lasts. */
     steadyMul: number;
-    dash: { seconds: number; speedMul: number; cooldownSeconds: number };
-    reveal: { seconds: number; range: number; cooldownSeconds: number };
-    decoy: { seconds: number; cooldownSeconds: number };
+    /** Reveal: on touching a checkpoint, hazards within `range` tiles show for `seconds`. */
+    reveal: { seconds: number; range: number };
   };
   /** What threat (the sum of a runner's cards' threat) does. Enemies also prefer the highest-threat runner in sight. */
   threat: {
@@ -228,17 +224,11 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   treasures: { reach: 0.7, pointsEach: 1 },
   skills: {
-    navigationMemorySeconds: 60,
-    trapSenseReveal: 4,
-    trapSenseTell: 5,
-    wideEyesMul: 1.25,
-    fleetFootSpeedMul: 1.08,
+    trapSenseDelaySeconds: 0.5,
     deepLungsDrainMul: 0.7,
     deepLungsRegenMul: 1.3,
     steadyMul: 0.5,
-    dash: { seconds: 0.6, speedMul: 1.8, cooldownSeconds: 8 },
-    reveal: { seconds: 4, range: 8, cooldownSeconds: 15 },
-    decoy: { seconds: 4, cooldownSeconds: 15 },
+    reveal: { seconds: 5, range: 8 },
   },
   threat: { trapReachPerThreat: 0.05, trapReachMax: 0.3, wakeRangePerThreat: 0.5, wakeRangeMax: 3 },
   health: { hearts: 3, respawnSafeSeconds: 2 },

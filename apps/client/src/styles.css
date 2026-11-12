@@ -204,9 +204,6 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .card span { color: var(--muted); }
 .card small { color: #ffd23f; }
 .card.dim { opacity: 0.45; border-color: var(--panel-edge); }
-.actives { display: flex; gap: 8px; font-size: 13px; }
-.active-skill { padding: 3px 8px; border: 1px solid var(--good); border-radius: 999px; background: rgba(21, 25, 34, 0.85); color: var(--text); }
-.active-skill.cooling { border-color: var(--panel-edge); opacity: 0.7; }
 .hearts { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
 .hearts i { font-style: normal; color: rgba(255, 255, 255, 0.18); }
 .hearts i.full { color: #ff5a6e; }

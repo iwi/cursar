@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { ActiveSkill, SkillId } from './skills';
+import type { SkillId } from './skills';
 import type { EnemyKind, GameMap, ObstacleKind, Point, TrapKind } from '../map/types';
 
 /** One tick of player intent. `seq` lets a server acknowledge inputs for client prediction. */
@@ -9,8 +9,6 @@ export interface PlayerInput {
   mx: number;
   my: number;
   sprint: boolean;
-  /** An active skill used on this tick (set on the tick its key was pressed). */
-  use?: ActiveSkill;
 }
 
 export const NO_INPUT: PlayerInput = { seq: 0, mx: 0, my: 0, sprint: false };
@@ -84,10 +82,10 @@ export interface PlayerState {
   offer: SkillId[] | null;
   /** Offers made so far (each deals from the deck afresh). */
   offersMade: number;
-  /** Seconds left before each active skill can be used again. */
-  cooldowns: Partial<Record<ActiveSkill, number>>;
-  dashTime: number;
+  /** Seconds left of Reveal's glow after touching a checkpoint. */
   revealTime: number;
+  /** Trap sense: the armed trap the runner stepped on and the race time it clicked, or null. */
+  trapClick: { index: number; at: number } | null;
   finished: boolean;
   finishTime: number | null;
 }
@@ -121,13 +119,6 @@ export interface TurretState {
 
 export type FoeState = ChaserState | TurretState;
 
-export interface Decoy {
-  owner: string;
-  x: number;
-  y: number;
-  /** Seconds left. */
-  time: number;
-}
 
 export interface Bolt {
   id: number;
@@ -163,8 +154,6 @@ export interface RaceState {
   foes: (FoeState | null)[];
   /** Turret bolts in flight. */
   bolts: Bolt[];
-  /** Decoys left by runners: chasers and turrets go after them while they last. */
-  decoys: Decoy[];
   nextBoltId: number;
   players: PlayerState[];
 }
@@ -201,7 +190,8 @@ export type GameEvent =
   /** Three cards on offer at a checkpoint. */
   | { type: 'offer'; playerId: string; cards: SkillId[] }
   | { type: 'skill'; playerId: string; skill: SkillId }
-  | { type: 'skillUsed'; playerId: string; skill: ActiveSkill }
+  /** Trap sense: the runner stepped on an armed trap, which springs unless they get off it in time. */
+  | { type: 'trapClick'; playerId: string; index: number }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */

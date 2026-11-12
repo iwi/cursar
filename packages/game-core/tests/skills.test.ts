@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CONFIG, type GameEvent, type GameMap, MAP_SIZES, type PlayerInput, SKILLS, SKILL_IDS, type SkillId, applyEffect,
-  createRace, damage, effectiveVision, generateMap, inRect, isSolid, maxHearts, pickSkill, skipPreview, step, trapReach, trapSenses,
-  wakeRange,
+  createRace, damage, generateMap, inRect, isSolid, maxHearts, pickSkill, skipPreview, step, trapArmed, trapReach, wakeRange,
 } from '../src';
 import { mapFromText } from './helpers';
 
@@ -79,41 +78,62 @@ describe('treasures and the skill pick', () => {
     const state = raceOn(LANE);
     const me = state.players[0]!;
     me.points = 1;
-    me.offer = ['fleetFoot', 'navigation', 'tough'];
+    me.offer = ['tough', 'steady', 'deepLungs'];
     expect(pickSkill(state, 'p1', 0, [])).toBe(false);
     expect(pickSkill(state, 'p1', 5, [])).toBe(false);
     expect(pickSkill(state, 'p1', 1, [])).toBe(true);
-    expect(me.skills).toEqual(['navigation']);
+    expect(me.skills).toEqual(['steady']);
   });
 
   it('deals the same cards for the same race, and never a skill already taken', () => {
     const deal = () => {
       const s = raceOn({ ...LANE, treasures: [{ x: 5.5, y: 1.5 }] });
-      s.players[0]!.skills = ['dash'];
+      s.players[0]!.skills = ['tough'];
       run(s, right, 3);
       return s.players[0]!.offer;
     };
     expect(deal()).toEqual(deal());
-    expect(deal()).not.toContain('dash');
+    expect(deal()).not.toContain('tough');
   });
 });
 
 describe('what the skills do', () => {
-  it('senses: longer memory, traps seen and heard further, wider vision', () => {
-    const { state, me } = withSkills(['navigation', 'trapSense', 'wideEyes']);
-    expect(effectiveVision(state.config, me).memorySeconds).toBe(config.skills.navigationMemorySeconds);
-    expect(effectiveVision(state.config, me).ahead).toBeCloseTo(config.vision.ahead * config.skills.wideEyesMul);
-    expect(trapSenses(state.config, me)).toEqual({ reveal: config.skills.trapSenseReveal, tell: config.skills.trapSenseTell });
+  it('trap sense: a trap clicks first and springs only if the runner stays on it', () => {
+    const traps = [{ kind: 'glue' as const, x: 6, y: 2 }];
+    const stay = withSkills(['trapSense']);
+    stay.state.map = { ...stay.state.map, traps };
+    stay.me.x = 6.5;
+    stay.me.y = 2.5;
+    let events = run(stay.state, still, 0.1);
+    expect(events).toContainEqual({ type: 'trapClick', playerId: 'p1', index: 0 });
+    expect(events.some((e) => e.type === 'trap')).toBe(false);
+    events = run(stay.state, still, config.skills.trapSenseDelaySeconds);
+    expect(events.some((e) => e.type === 'trap')).toBe(true);
+
+    // Stepping off in time leaves it armed.
+    const off = withSkills(['trapSense']);
+    off.state.map = { ...off.state.map, traps };
+    off.me.x = 6.5;
+    off.me.y = 2.5;
+    run(off.state, still, 0.1);
+    off.me.x = 3.5;
+    expect(run(off.state, still, 1).some((e) => e.type === 'trap')).toBe(false);
+    expect(trapArmed(off.state, 0)).toBe(true);
+    expect(off.me.trapClick).toBe(null);
   });
 
-  it('body: faster, longer sprint, a fourth heart, shorter loss of control', () => {
+  it('reveal: touching a checkpoint shows the hazards round it for a while', () => {
+    const { state, me } = withSkills(['reveal']);
+    while (!me.checkpoints[0]) run(state, right, 1 / 60);
+    expect(me.revealTime).toBeGreaterThan(config.skills.reveal.seconds - 0.1);
+    run(state, still, config.skills.reveal.seconds + 0.1);
+    expect(me.revealTime).toBe(0);
     const plain = withSkills([]);
-    const quick = withSkills(['fleetFoot']);
-    const x0 = plain.me.x;
-    run(plain.state, right, 1);
-    run(quick.state, right, 1);
-    expect((quick.me.x - x0) / (plain.me.x - x0)).toBeCloseTo(config.skills.fleetFootSpeedMul, 1);
+    while (!plain.me.checkpoints[0]) run(plain.state, right, 1 / 60);
+    expect(plain.me.revealTime).toBe(0);
+  });
 
+  it('body: longer sprint, a fourth heart, shorter loss of control', () => {
     const lungs = withSkills(['deepLungs']);
     const base = withSkills([]);
     run(lungs.state, { ...right, sprint: true }, 1.5);
@@ -127,40 +147,6 @@ describe('what the skills do', () => {
     const steady = withSkills(['steady']);
     applyEffect(steady.state.config, steady.me, 'reversed', []);
     expect(steady.me.effects[0]!.time).toBeCloseTo(config.effects.reversed.seconds * config.skills.steadyMul);
-  });
-
-  it('dash: a burst of speed on its key, then a cooldown', () => {
-    const { state, me } = withSkills(['dash']);
-    const events = run(state, { ...right, use: 'dash' }, 1 / 60);
-    expect(events).toContainEqual({ type: 'skillUsed', playerId: 'p1', skill: 'dash' });
-    expect(me.dashTime).toBeGreaterThan(0);
-    // Using it again straight away does nothing.
-    expect(run(state, { ...right, use: 'dash' }, 1 / 60).some((e) => e.type === 'skillUsed')).toBe(false);
-    run(state, right, config.skills.dash.cooldownSeconds);
-    expect(run(state, { ...right, use: 'dash' }, 1 / 60).some((e) => e.type === 'skillUsed')).toBe(true);
-  });
-
-  it('only skills the runner has can be used', () => {
-    const { state } = withSkills([]);
-    expect(run(state, { ...still, use: 'decoy' }, 1 / 60).some((e) => e.type === 'skillUsed')).toBe(false);
-    expect(state.decoys).toEqual([]);
-  });
-
-  it('decoy: chasers go after it instead of the runner, and it runs out', () => {
-    const map: GameMap = { ...LANE, enemies: [{ kind: 'chaser', x: 8.5, y: 2.5 }] };
-    const state = raceOn(map);
-    const me = state.players[0]!;
-    me.skills = ['decoy'];
-    me.x = 5.5;
-    me.y = 2.5;
-    run(state, { ...still, use: 'decoy' }, 1 / 60);
-    expect(state.decoys).toHaveLength(1);
-    me.x = 2.5;
-    me.y = 3.5;
-    const events = run(state, still, 1.5);
-    expect(events.some((e) => e.type === 'enemyHit')).toBe(false);
-    run(state, still, config.skills.decoy.seconds);
-    expect(state.decoys).toEqual([]);
   });
 });
 
@@ -193,7 +179,7 @@ describe('threat', () => {
     const map: GameMap = { ...LANE, enemies: [{ kind: 'turret', x: 12.5, y: 2.5 }] };
     const state = createRace(map, [{ id: 'a', name: 'A', color: 0, slot: 0 }]);
     // Two runners at equal distance either side; the far-threat one is picked.
-    state.players.push({ ...state.players[0]!, id: 'b', name: 'B', effects: [], cooldowns: {}, skills: [], treasures: [], checkpoints: [false], markers: [], footprints: [] });
+    state.players.push({ ...state.players[0]!, id: 'b', name: 'B', effects: [], skills: [], treasures: [], checkpoints: [false], markers: [], footprints: [] });
     skipPreview(state);
     while (state.phase !== 'racing') step(state, {});
     const [a, b] = state.players;
@@ -229,7 +215,7 @@ describe('treasures on generated maps', () => {
   });
 
   it('every skill is in the deck, with a cost of 1 to 3', () => {
-    expect(SKILL_IDS).toHaveLength(10);
+    expect(SKILL_IDS).toHaveLength(5);
     for (const id of SKILL_IDS) {
       expect(SKILLS[id].cost).toBeGreaterThanOrEqual(1);
       expect(SKILLS[id].cost).toBeLessThanOrEqual(3);

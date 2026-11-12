@@ -51,7 +51,6 @@ export class NetDriver implements RaceDriver {
   paused = false;
   readonly resultsLayout = 'side';
   private pending: PlayerInput[] = [];
-  private decoyList: { x: number; y: number }[] = [];
   /** Traps this page sprang in its own prediction: map trap index to the tick it happened. */
   private localSprung = new Map<number, number>();
   private seq = 0;
@@ -167,8 +166,6 @@ export class NetDriver implements RaceDriver {
         color: this.colors[snapshot.prints[i + 3]!] ?? 0xffffff,
       });
     }
-    this.decoyList = [];
-    for (let i = 0; i + 1 < snapshot.decoys.length; i += 2) this.decoyList.push({ x: snapshot.decoys[i]!, y: snapshot.decoys[i + 1]! });
     this.queued.push(...snapshot.events);
   }
 
@@ -271,9 +268,6 @@ export class NetDriver implements RaceDriver {
     return out;
   }
 
-  decoys() {
-    return this.decoyList;
-  }
 
   pick(slot: number): void {
     // Taken at once here (so the card bar clears); the server's word follows with the next update.

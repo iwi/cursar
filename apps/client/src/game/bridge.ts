@@ -1,4 +1,4 @@
-import type { ActiveSkill, EffectKind, RacePhase, SkillId } from '@cursar/game-core';
+import type { EffectKind, RacePhase, SkillId } from '@cursar/game-core';
 
 /** What the HUD needs to know, sent from the game scene to the React interface. */
 export interface HudState {
@@ -30,7 +30,6 @@ export interface HudState {
   /** Cards on offer, or null. */
   offer: { id: SkillId; name: string; text: string; cost: number; threat: number; affordable: boolean }[] | null;
   /** Active skills taken: their key and seconds until usable (0 = ready). */
-  actives: { id: ActiveSkill; name: string; key: string; cooldown: number }[];
   /** Effects on the local runner: seconds left and in all. */
   effects: { kind: EffectKind; left: number; total: number }[];
   /** Who is ready during the preview (network play only). */

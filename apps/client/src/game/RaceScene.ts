@@ -17,14 +17,12 @@ import {
   effectiveVision,
   gateClosed,
   hasEffect,
-  type ActiveSkill,
-  ACTIVE_SKILLS,
   SKILLS,
   maxHearts,
   obstacleTime,
+  patrollerPose,
   patrollerPosition,
   trapArmed,
-  trapSenses,
 } from '@cursar/game-core';
 import { ENEMY_LABEL, EFFECT_STYLE, TRAP_STYLE } from './effects';
 import Phaser from 'phaser';
@@ -155,7 +153,6 @@ export class RaceScene extends Phaser.Scene {
   private rumbleTimer = 0;
   private tellTimer = 0;
   /** An active skill key pressed, sent with the next tick's input. */
-  private pendingUse: ActiveSkill | undefined;
   /** "You" above the local runner at the start, so everyone finds themselves at once. */
   private youLabel: Phaser.GameObjects.Text | null = null;
   /** Per patroller (map enemy index): where it was and how far it has walked since its last step sound. */
@@ -199,9 +196,8 @@ export class RaceScene extends Phaser.Scene {
     }
     keyboard.on('keydown-ENTER', () => driver.ready());
     keyboard.on('keydown-M', () => this.toggleMap());
-    // Skill cards: 1, 2, 3. Active skills: their own keys.
+    // Skill cards: 1, 2, 3.
     (['ONE', 'TWO', 'THREE'] as const).forEach((key, slot) => keyboard.on(`keydown-${key}`, () => this.pick(slot)));
-    for (const skill of ACTIVE_SKILLS) keyboard.on(`keydown-${SKILLS[skill].key}`, () => (this.pendingUse = skill));
     keyboard.on('keydown-BACKSPACE', () => {
       if (this.state.phase === 'preview' && driver.removeLastMarker()) this.data_.audio.click();
     });
@@ -311,8 +307,6 @@ export class RaceScene extends Phaser.Scene {
   private readIntent(): MoveIntent {
     // Looking at the full map costs time: the runner cannot move meanwhile.
     if (this.peeking()) return { mx: 0, my: 0, sprint: false };
-    const use = this.pendingUse;
-    this.pendingUse = undefined;
     if (this.autopilot) {
       const { mx, my, sprint } = this.autopilot(this.me());
       return { mx, my, sprint };
@@ -322,7 +316,6 @@ export class RaceScene extends Phaser.Scene {
       mx: (down('right') ? 1 : 0) - (down('left') ? 1 : 0),
       my: (down('down') ? 1 : 0) - (down('up') ? 1 : 0),
       sprint: down('sprint'),
-      use,
     };
   }
 
@@ -355,6 +348,7 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'checkpoint':
         audio.checkpoint(event.remaining);
+        if (event.playerId === me.id && me.skills.includes('reveal')) audio.reveal();
         break;
       case 'finishLocked':
         audio.finishLocked();
@@ -399,8 +393,8 @@ export class RaceScene extends Phaser.Scene {
           bridge.emit('notice', SKILLS[event.skill].name);
         }
         break;
-      case 'skillUsed':
-        if (event.playerId === me.id) audio.skillUsed(event.skill);
+      case 'trapClick':
+        if (event.playerId === me.id) audio.trapClick();
         break;
       case 'hurt':
         if (event.playerId === me.id) {
@@ -499,7 +493,7 @@ export class RaceScene extends Phaser.Scene {
     this.tellTimer = 0.5;
     const { state } = this;
     const me = this.me();
-    const range = trapSenses(state.config, me).tell;
+    const range = state.config.traps.tellDistance;
     let nearest: { dx: number; dist: number } | null = null;
     (this.data_.map.traps ?? []).forEach((trap, i) => {
       if (!trapArmed(state, i)) return;
@@ -844,13 +838,6 @@ export class RaceScene extends Phaser.Scene {
     this.drawTraps(g, top);
     this.drawObstacles(g);
     this.drawEnemies(g, top);
-    for (const d of this.driver.decoys()) {
-      if (!this.isVisibleTile(d.x, d.y)) continue;
-      // A decoy: a flickering outline of a runner.
-      const a = 0.4 + 0.3 * Math.sin(this.time.now / 90);
-      g.lineStyle(3, me.color, a).strokeCircle(d.x * PX, d.y * PX, state.config.player.radius * PX * 1.2);
-      g.fillStyle(me.color, a * 0.4).fillCircle(d.x * PX, d.y * PX, state.config.player.radius * PX);
-    }
 
     // Rivals. In a race the server only sends the ones inside your view.
     const r = state.config.player.radius * PX;
@@ -960,9 +947,9 @@ export class RaceScene extends Phaser.Scene {
       if (e.kind !== 'patroller') return;
       if (whole) {
         // The beat it walks.
-        g.lineStyle(3, 0x8e5bd6, 0.45).lineBetween(e.ax * PX, e.ay * PX, e.bx * PX, e.by * PX);
+        g.lineStyle(3, 0x8e5bd6, 0.45).strokePoints(e.path.map((pt) => ({ x: pt.x * PX, y: pt.y * PX })), false, false);
       }
-      const at = patrollerPosition(config, e, t);
+      const at = patrollerPose(config, e, t);
       // The Reveal skill shows patrollers close by through the fog.
       const me = this.me();
       const revealed = !this.isVisibleTile(at.x, at.y) && this.revealing() && Math.hypot(at.x - me.x, at.y - me.y) <= config.skills.reveal.range;
@@ -971,7 +958,7 @@ export class RaceScene extends Phaser.Scene {
       const r = config.enemies.patroller.radius * PX * k;
       const x = at.x * PX;
       const y = at.y * PX;
-      const heading = Math.atan2(e.by - e.ay, e.bx - e.ax);
+      const heading = at.heading;
       // A purple diamond with a pointer.
       const pts = [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].map((a) => ({ x: x + Math.cos(a + heading) * r * 1.25, y: y + Math.sin(a + heading) * r * 1.25 }));
       pen.fillStyle(0x8e5bd6, 1).fillPoints(pts, true);
@@ -1026,7 +1013,7 @@ export class RaceScene extends Phaser.Scene {
     const { state } = this;
     const me = this.me();
     const all = !this.racingView() || this.peeking();
-    const reveal = trapSenses(state.config, me).reveal;
+    const reveal = state.config.traps.revealDistance;
     const revealing = this.revealing();
     (this.data_.map.traps ?? []).forEach((trap, i) => {
       const armed = trapArmed(state, i);
@@ -1269,7 +1256,6 @@ export class RaceScene extends Phaser.Scene {
       points: me.points,
       threat: me.threat,
       offer: me.offer?.map((id) => ({ ...SKILLS[id], affordable: SKILLS[id].cost <= me.points })) ?? null,
-      actives: ACTIVE_SKILLS.filter((id) => me.skills.includes(id)).map((id) => ({ id, name: SKILLS[id].name, key: SKILLS[id].key!, cooldown: me.cooldowns[id] ?? 0 })),
       effects: me.effects.map((e) => ({ kind: e.kind, left: e.time, total: e.total })),
       readiness: this.driver.readiness(),
     });

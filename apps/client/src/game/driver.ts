@@ -1,5 +1,4 @@
 import {
-  type ActiveSkill,
   type EffectKind,
   type GameConfig,
   type GameEvent,
@@ -25,8 +24,6 @@ export interface MoveIntent {
   mx: number;
   my: number;
   sprint: boolean;
-  /** An active skill whose key was pressed since the last tick. */
-  use?: ActiveSkill;
 }
 
 export interface Rival {
@@ -95,8 +92,6 @@ export interface RaceDriver {
   foes(): FoeSprite[];
   /** Turret bolts in flight. */
   bolts(): { x: number; y: number }[];
-  /** Decoys known to this page. */
-  decoys(): { x: number; y: number }[];
   /** Take card 0, 1 or 2 of the skill offer. */
   pick(slot: number): void;
   ghost(): { x: number; y: number; facing: number } | null;
@@ -218,9 +213,6 @@ export class LocalDriver implements RaceDriver {
     return this.state.bolts.map((b) => ({ x: b.x, y: b.y }));
   }
 
-  decoys() {
-    return this.state.decoys.map((d) => ({ x: d.x, y: d.y }));
-  }
 
   pick(slot: number): void {
     pickSkill(this.state, LOCAL_ID, slot, this.queued);

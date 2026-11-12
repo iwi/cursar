@@ -74,8 +74,8 @@ export const ENEMY_KINDS = ['patroller', 'chaser', 'turret'] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
 export type EnemySpawn =
-  /** Walks back and forth between two points along a corridor, on a schedule (like a boulder). */
-  | { kind: 'patroller'; ax: number; ay: number; bx: number; by: number; phase: number }
+  /** Walks back and forth along a winding beat (corridor cell centres, turning at least one corner), on a schedule. */
+  | { kind: 'patroller'; path: Point[]; phase: number }
   /** Sleeps at its home until a runner comes near, then chases. */
   | { kind: 'chaser'; x: number; y: number }
   /** Fixed in place; turns to face a runner in sight and fires bolts. */

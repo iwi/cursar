@@ -85,11 +85,9 @@ export function controlledInput(p: PlayerState, input: PlayerInput): PlayerInput
   return mx === input.mx && my === input.my ? input : { ...input, mx, my };
 }
 
-/** Multiplier on top speed from slow and haste, Fleet foot and Dash (they combine). */
+/** Multiplier on top speed from slow and haste (they combine). */
 export function effectSpeedMul(config: GameConfig, p: PlayerState): number {
   let mul = 1;
-  if (p.skills.includes('fleetFoot')) mul *= config.skills.fleetFootSpeedMul;
-  if (p.dashTime > 0) mul *= config.skills.dash.speedMul;
   for (const e of p.effects) {
     if (e.kind === 'slow') mul *= config.effects.slow.speedMul;
     else if (e.kind === 'haste') mul *= config.effects.haste.speedMul;
@@ -97,16 +95,10 @@ export function effectSpeedMul(config: GameConfig, p: PlayerState): number {
   return mul;
 }
 
-/**
- * The runner's vision right now: larger with Wide eyes, smaller while
- * blinded; memory longer with Navigation. Used for drawing and by the server alike.
- */
+/** The runner's vision right now: smaller while blinded. Used for drawing and by the server alike. */
 export function effectiveVision(config: GameConfig, p: PlayerState): GameConfig['vision'] {
-  let mul = 1;
-  if (p.skills.includes('wideEyes')) mul *= config.skills.wideEyesMul;
-  if (hasEffect(p, 'blind')) mul *= config.effects.blind.visionMul;
-  const memorySeconds = p.skills.includes('navigation') ? config.skills.navigationMemorySeconds : config.vision.memorySeconds;
-  if (mul === 1 && memorySeconds === config.vision.memorySeconds) return config.vision;
-  const { ahead, side, back } = config.vision;
+  if (!hasEffect(p, 'blind')) return config.vision;
+  const mul = config.effects.blind.visionMul;
+  const { ahead, side, back, memorySeconds } = config.vision;
   return { ahead: ahead * mul, side: side * mul, back: back * mul, memorySeconds };
 }
