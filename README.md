@@ -69,7 +69,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 - The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.
 - **Checkpoints** are the pink flags. The finish only counts once you have touched them all; the order is up to you.
 - You have **3 hearts**. A new checkpoint restores them; losing the last sends you back to the last checkpoint you touched.
-- **Moving obstacles**: boulders roll along corridors, barriers turn round some plazas' landmarks, and gates open and close. A boulder or barrier costs a heart and knocks you aside; a closed gate just blocks the way. Watch how they move in the preview, and listen for them in the race.
+- **Moving obstacles**: boulders roll along corridors, barriers turn round some plazas' landmarks, and gates open and close. A boulder or barrier costs a heart and knocks you aside, and so does a gate closing on you (a closed gate otherwise just blocks the way). Boulder corridors always have side passages to duck into. Watch how they move in the preview, and listen for them in the race.
 - In a solo race, your best run on each map is saved in the browser and races alongside you as a white **ghost**.
 - In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
 - A runner who has finished watches the rest of the race on the full map.

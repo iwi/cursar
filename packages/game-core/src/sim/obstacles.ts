@@ -61,9 +61,20 @@ export function closedGateCheck(map: GameMap, config: GameConfig, t: number): ((
   return (tx, ty) => closed.some((g) => tx >= g.x && tx < g.x + g.w && ty >= g.y && ty < g.y + g.h);
 }
 
-/** How far into an obstacle the runner is, and which way out, or null if they are clear of it. */
-function overlap(config: GameConfig, o: Obstacle, t: number, x: number, y: number): { nx: number; ny: number; depth: number } | null {
-  const radius = config.player.radius;
+/**
+ * How far into an obstacle a runner at (x, y) is, which way out, and the
+ * obstacle's nearest point, or null if they are clear of it. `margin` widens
+ * the obstacle, for looking ahead.
+ */
+export function overlap(
+  config: GameConfig,
+  o: Obstacle,
+  t: number,
+  x: number,
+  y: number,
+  margin = 0,
+): { nx: number; ny: number; depth: number; cx: number; cy: number } | null {
+  const radius = config.player.radius + margin;
   let cx: number;
   let cy: number;
   let reach: number;
@@ -87,36 +98,92 @@ function overlap(config: GameConfig, o: Obstacle, t: number, x: number, y: numbe
   const dy = y - cy;
   const d = Math.hypot(dx, dy);
   if (d >= reach) return null;
-  if (d < 1e-6) return { nx: 1, ny: 0, depth: reach };
-  return { nx: dx / d, ny: dy / d, depth: reach - d };
+  if (d < 1e-6) return { nx: 1, ny: 0, depth: reach, cx, cy };
+  return { nx: dx / d, ny: dy / d, depth: reach - d, cx, cy };
 }
 
 /**
- * Checks whether a boulder or barrier has hit the runner. A hit costs hearts,
- * shoves the runner clear and stuns them briefly; then obstacles pass through
- * them for a moment so the same one cannot hit again straight away.
+ * A hit: costs hearts, puts the runner at (x, y) moving away along (nx, ny)
+ * and stuns them briefly; then obstacles pass through them for a moment so the
+ * same one cannot hit again straight away.
  */
+function hit(state: RaceState, p: PlayerState, kind: Obstacle['kind'], x: number, y: number, nx: number, ny: number, events: GameEvent[]): void {
+  const { map, config } = state;
+  const { obstacles } = config;
+  p.hitGuard = obstacles.hitGuardSeconds;
+  events.push({ type: 'obstacleHit', playerId: p.id, kind });
+  const fromX = p.x;
+  const fromY = p.y;
+  p.x = x;
+  p.y = y;
+  p.vx = nx * obstacles.knockSpeed;
+  p.vy = ny * obstacles.knockSpeed;
+  resolveWalls(map, p, config.player.radius, fromX, fromY, closedGateCheck(map, config, obstacleTime(state)));
+  const before = events.length;
+  damage(config, p, obstacles.hitDamage, events);
+  const respawned = events.slice(before).some((e) => e.type === 'respawn');
+  if (!respawned) applyEffect(config, p, 'stun', events, obstacles.hitStunSeconds);
+}
+
+/** Checks whether a boulder or barrier has hit the runner. */
 export function hitObstacles(state: RaceState, p: PlayerState, events: GameEvent[]): void {
   const { map, config } = state;
   if (!map.obstacles || map.obstacles.length === 0 || p.hitGuard > 0 || p.safeTime > 0 || p.finished) return;
   const t = obstacleTime(state);
   for (const o of map.obstacles) {
-    const hit = overlap(config, o, t, p.x, p.y);
-    if (!hit) continue;
-    const { obstacles } = config;
-    p.hitGuard = obstacles.hitGuardSeconds;
-    events.push({ type: 'obstacleHit', playerId: p.id, kind: o.kind as 'boulder' | 'barrier' });
-    const fromX = p.x;
-    const fromY = p.y;
-    p.x += hit.nx * (hit.depth + 0.05);
-    p.y += hit.ny * (hit.depth + 0.05);
-    p.vx = hit.nx * obstacles.knockSpeed;
-    p.vy = hit.ny * obstacles.knockSpeed;
-    resolveWalls(map, p, config.player.radius, fromX, fromY, closedGateCheck(map, config, t));
-    const before = events.length;
-    damage(config, p, obstacles.hitDamage, events);
-    const respawned = events.slice(before).some((e) => e.type === 'respawn');
-    if (!respawned) applyEffect(config, p, 'stun', events, obstacles.hitStunSeconds);
+    const into = overlap(config, o, t, p.x, p.y);
+    if (!into) continue;
+    const out = into.depth + 0.05;
+    hit(state, p, o.kind, p.x + into.nx * out, p.y + into.ny * out, into.nx, into.ny, events);
     return;
   }
+}
+
+/**
+ * A gate that closes on a runner standing in it hurts them and throws them out
+ * to the nearer side. Call before movement: a runner can only be inside a
+ * closed gate if it closed on them (otherwise it is solid). Without a hit (the
+ * guard or safe time), the walls code simply pushes them out.
+ */
+export function gateTraps(state: RaceState, p: PlayerState, events: GameEvent[]): void {
+  const { map, config } = state;
+  if (!map.obstacles || p.hitGuard > 0 || p.safeTime > 0 || p.finished) return;
+  const t = obstacleTime(state);
+  const r = config.player.radius;
+  for (const o of map.obstacles) {
+    if (o.kind !== 'gate' || !gateClosed(config, o, t)) continue;
+    const nearX = Math.max(o.x, Math.min(p.x, o.x + o.w));
+    const nearY = Math.max(o.y, Math.min(p.y, o.y + o.h));
+    // Clearly inside, not just pressed against it (walls leave a runner exactly `r` away).
+    if (Math.hypot(p.x - nearX, p.y - nearY) >= r - 0.05) continue;
+    // Out across the gate's thin side, whichever way is nearer.
+    if (o.w <= o.h) {
+      const side = p.x < o.x + o.w / 2 ? -1 : 1;
+      hit(state, p, 'gate', side < 0 ? o.x - r - 0.05 : o.x + o.w + r + 0.05, p.y, side, 0, events);
+    } else {
+      const side = p.y < o.y + o.h / 2 ? -1 : 1;
+      hit(state, p, 'gate', p.x, side < 0 ? o.y - r - 0.05 : o.y + o.h + r + 0.05, 0, side, events);
+    }
+    return;
+  }
+}
+
+/**
+ * For computer players: the first boulder or barrier that will be within
+ * `margin` of (x, y) at time `t`, or a gate that will be closed there.
+ * Returns where the danger is, or null.
+ */
+export function dangerAt(state: RaceState, t: number, x: number, y: number, margin: number): Point | null {
+  const { config } = state;
+  for (const o of state.map.obstacles ?? []) {
+    if (o.kind === 'gate') {
+      if (!gateClosed(config, o, t)) continue;
+      const reach = config.player.radius + margin;
+      if (x > o.x - reach && x < o.x + o.w + reach && y > o.y - reach && y < o.y + o.h + reach) return { x: o.x + o.w / 2, y: o.y + o.h / 2 };
+      continue;
+    }
+    const near = overlap(config, o, t, x, y, margin);
+    if (near) return { x: near.cx, y: near.cy };
+  }
+  return null;
 }

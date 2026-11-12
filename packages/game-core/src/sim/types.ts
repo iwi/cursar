@@ -110,7 +110,7 @@ export type GameEvent =
   | { type: 'effectEnd'; playerId: string; kind: EffectKind }
   /** A loss-of-control effect was refused: another was running, or the guard after one was. */
   | { type: 'effectResisted'; playerId: string; kind: EffectKind }
-  /** A boulder or barrier hit the runner (the lost heart and the stun follow as their own events). */
+  /** A boulder or barrier hit the runner, or a gate closed on them (the lost heart and the stun follow as their own events). */
   | { type: 'obstacleHit'; playerId: string; kind: ObstacleKind }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }

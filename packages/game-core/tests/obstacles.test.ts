@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CONFIG, type GameEvent, type GameMap, MAP_SIZES, type Obstacle, type PlayerInput, barrierEnds, boulderPosition,
-  createRace, flipMap, gateClosed, generateMap, inRect, isSolid, obstacleTime, skipPreview, step,
+  createAutopilot, createRace, flipMap, gateClosed, generateMap, inRect, isSolid, obstacleTime, skipPreview, step,
 } from '../src';
 import { mapFromText } from './helpers';
 
@@ -127,9 +127,38 @@ describe('obstacles in a race', () => {
     state.map.obstacles = [{ kind: 'gate', x: 8, y: 3, w: 1, h: 2, phase }];
     run(state, input(1, 0), closedSeconds - 0.3);
     expect(me.x).toBeLessThan(8 - config.player.radius + 0.01);
+    // Walking into a closed gate blocks without hurting.
+    expect(me.health).toBe(config.health.hearts);
     // Once it opens, through we go.
     run(state, input(1, 0), 1.5);
     expect(me.x).toBeGreaterThan(9.5);
+  });
+
+  it('a gate closing on a runner costs a heart and throws them out to the nearer side', () => {
+    const map = mapFromText([
+      '####################',
+      '#S......#..........#',
+      '#.......#..........#',
+      '#..................#',
+      '#..................#',
+      '#.......#..........#',
+      '#.......#.........F#',
+      '####################',
+    ]);
+    const state = raceWith([], map);
+    const me = state.players[0]!;
+    // Standing in the gap, a little right of its middle.
+    me.x = 8.6;
+    me.y = 4;
+    const { openSeconds, closedSeconds } = config.obstacles.gate;
+    const now = obstacleTime(state);
+    const phase = (((openSeconds - 0.1 - now) / (openSeconds + closedSeconds)) % 1 + 1) % 1;
+    state.map.obstacles = [{ kind: 'gate', x: 8, y: 3, w: 1, h: 2, phase }];
+    const events = run(state, input(0, 0), 0.3);
+    expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['obstacleHit', 'hurt', 'effect']));
+    expect(events.find((e) => e.type === 'obstacleHit')).toMatchObject({ kind: 'gate' });
+    expect(me.health).toBe(config.health.hearts - 1);
+    expect(me.x).toBeGreaterThanOrEqual(9 + config.player.radius);
   });
 });
 
@@ -170,6 +199,46 @@ describe('obstacles on generated maps', () => {
           }
           if (o.kind === 'barrier') expect(map.landmarks.some((l) => l.x === o.x && l.y === o.y)).toBe(true);
         }
+      }
+    }
+  });
+
+  it('gives every cell along a boulder’s corridor a side passage to duck into', () => {
+    for (const size of sizes) {
+      for (let i = 0; i < 6; i++) {
+        const map = generateMap({ seed: `dodge-${i}`, size });
+        for (const o of map.obstacles!) {
+          if (o.kind !== 'boulder') continue;
+          const cells = Math.round(Math.hypot(o.bx - o.ax, o.by - o.ay) / 3) + 1;
+          const dx = Math.sign(o.bx - o.ax);
+          const dy = Math.sign(o.by - o.ay);
+          for (let n = 0; n < cells; n++) {
+            const cx = o.ax + dx * 3 * n;
+            const cy = o.ay + dy * 3 * n;
+            // The wall tiles either side of the corridor at this cell: at least one side is open.
+            const sides = dx !== 0
+              ? [[cx - 1, cy - 2], [cx - 1, cy + 1]]
+              : [[cx - 2, cy - 1], [cx + 1, cy - 1]];
+            expect(sides.some(([x, y]) => !isSolid(map, x!, y!))).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it('careful computer players get round the obstacles and finish, even slow ones', () => {
+    for (const size of sizes) {
+      for (let i = 0; i < 2; i++) {
+        const map = generateMap({ seed: `bots-${i}`, size });
+        const state = createRace(map, [{ id: 'p1', name: 'Bot', color: 0 }]);
+        const pilot = createAutopilot(map);
+        skipPreview(state);
+        const speed = 0.45;
+        while (state.phase !== 'finished') {
+          const steer = state.phase === 'racing' ? pilot(state.players[0]!, false, { state, speed }) : { seq: 0, mx: 0, my: 0, sprint: false };
+          step(state, { p1: { ...steer, mx: steer.mx * speed, my: steer.my * speed } });
+        }
+        expect(state.players[0]!.finished).toBe(true);
       }
     }
   });

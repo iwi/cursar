@@ -7,13 +7,13 @@ export type MapSize = 'small' | 'medium' | 'large';
 
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
 export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; obstacles: number; label: string }> = {
-  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 4, label: 'Small' },
-  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 5, label: 'Medium' },
-  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 6, label: 'Large' },
+  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, label: 'Small' },
+  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, label: 'Medium' },
+  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, label: 'Large' },
 };
 
 /** Bumped whenever the generator changes, so saved ghosts never play on a different layout. */
-const GENERATOR_VERSION = 4;
+const GENERATOR_VERSION = 5;
 
 export interface GenerateOptions {
   seed: string;
@@ -164,97 +164,12 @@ export function generateMap(options: GenerateOptions): GameMap {
     i++;
   }
 
-  // 5. Finish: the cell that is the longest walk from the start.
-  const base: GameMap = {
-    schema: 1,
-    id: `gen${GENERATOR_VERSION}-${size}-${seed}`,
-    name: `${MAP_SIZES[size].label} run “${seed}”`,
-    version: GENERATOR_VERSION,
-    width,
-    height,
-    tiles,
-    startPositions,
-    finish: { x: 0, y: 0, w: 0, h: 0 },
-    checkpoints: [],
-    landmarks,
-    generator: { seed, size },
-  };
-  const fromStart = distanceField(base, { x: sx, y: sy, w: 5, h: 5 });
-  let best = -1;
-  let finishC = 0;
-  let finishR = 0;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (reserved[r * cols + c]) continue;
-      const d = fromStart[(r * PITCH + 1) * width + c * PITCH + 1]!;
-      if (d > best) {
-        best = d;
-        finishC = c;
-        finishR = r;
-      }
-    }
-  }
-  base.finish = { x: finishC * PITCH + 1, y: finishR * PITCH + 1, w: 2, h: 2 };
-  reserve(finishC, finishR, finishC, finishR);
-
-  // 5b. Checkpoints: each one goes as far as possible (by walking distance) from
-  // the start, the finish and the checkpoints already placed.
-  const checkpointCount = options.checkpoints ?? MAP_SIZES[size].checkpoints;
-  const spread = [fromStart, distanceField(base, base.finish)];
-  for (let n = 0; n < checkpointCount; n++) {
-    let bestGap = -1;
-    let pickC = -1;
-    let pickR = -1;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (reserved[r * cols + c]) continue;
-        const tile = (r * PITCH + 1) * width + c * PITCH + 1;
-        let gap = Infinity;
-        for (const field of spread) gap = Math.min(gap, field[tile]!);
-        if (gap > bestGap) {
-          bestGap = gap;
-          pickC = c;
-          pickR = r;
-        }
-      }
-    }
-    if (pickC < 0) break;
-    const zone = { x: pickC * PITCH + 1, y: pickR * PITCH + 1, w: 2, h: 2 };
-    base.checkpoints.push(zone);
-    reserve(pickC, pickR, pickC, pickR);
-    spread.push(distanceField(base, zone));
-  }
-
-  // 6. Terrain patches: short runs of mud or ice along connected corridor cells.
-  let budget = Math.round(cols * rows * terrainShare);
-  for (let attempts = 0; budget > 0 && attempts < 300; attempts++) {
-    const terrain = rng.chance(0.5) ? Tile.Mud : Tile.Ice;
-    let c = rng.int(cols);
-    let r = rng.int(rows);
-    const run = 2 + rng.int(3);
-    for (let n = 0; n < run && budget > 0; n++) {
-      if (reserved[r * cols + c]) break;
-      fillCellsWhereFloor(c, r, terrain);
-      reserved[r * cols + c] = 1;
-      budget--;
-      const open = DIRS.filter((d) => inGrid(c + d.dx, r + d.dy) && isOpenBetween(c, r, d.dx, d.dy));
-      if (open.length === 0) break;
-      const d = rng.pick(open);
-      c += d.dx;
-      r += d.dy;
-    }
-  }
-  function fillCellsWhereFloor(c: number, r: number, t: number) {
-    for (let y = r * PITCH + 1; y <= r * PITCH + 2; y++) {
-      for (let x = c * PITCH + 1; x <= c * PITCH + 2; x++) if (get(x, y) === Tile.Floor) set(x, y, t);
-    }
-  }
-
-  // 7. Moving obstacles, roughly a third of each kind:
+  // 5. Moving obstacles, roughly a third of each kind (placed before the finish
+  //    and checkpoints, which are then spread over the maze as it finally is):
   //    - barriers turn round the landmark in a plaza;
   //    - boulders roll along straight corridors of 4 to 6 plain cells;
   //    - gates sit in the openings between two plain corridor cells.
-  // Nothing is placed in the start, finish, checkpoint or terrain cells.
+  // Nothing is placed in the start plaza; the finish, checkpoints and terrain keep off them.
   const obstacleCount = options.obstacles ?? MAP_SIZES[size].obstacles;
   const obstacles: Obstacle[] = [];
   const free = (c: number, r: number) => inGrid(c, r) && !reserved[r * cols + c];
@@ -292,9 +207,22 @@ export function generateMap(options: GenerateOptions): GameMap {
     const a = centre(c0, r0);
     const b = centre(c0 + run.dx * (len - 1), r0 + run.dy * (len - 1));
     obstacles.push({ kind: 'boulder', ax: a.x, ay: a.y, bx: b.x, by: b.y, phase: rng.next() });
-    // Keep other obstacles off the boulder's corridor and the cells beside its ends.
-    reserve(Math.min(c0, c0 + run.dx * (len - 1)) - run.dx, Math.min(r0, r0 + run.dy * (len - 1)) - run.dy,
-      Math.max(c0, c0 + run.dx * (len - 1)) + run.dx, Math.max(r0, r0 + run.dy * (len - 1)) + run.dy);
+    // The boulder fills the corridor, so there must be side passages to duck
+    // into: every cell along it has an opening to the side (one is carved
+    // where there is none). Without them it could not be passed unhurt, and
+    // slower runners (Easy computer players) need one within a few steps.
+    const sides = run.dx !== 0 ? [DIRS[2]!, DIRS[3]!] : [DIRS[0]!, DIRS[1]!];
+    for (let n = 0; n < len; n++) {
+      const c = c0 + run.dx * n;
+      const r = r0 + run.dy * n;
+      const options = sides.filter((d) => inGrid(c + d.dx, r + d.dy));
+      if (options.some((d) => isOpenBetween(c, r, d.dx, d.dy))) continue;
+      const d = rng.pick(options);
+      openBetween(c, r, d.dx, d.dy);
+    }
+    // Keep other obstacles off the boulder's corridor, its side passages and the cells beside its ends.
+    reserve(Math.min(c0, c0 + run.dx * (len - 1)) - 1, Math.min(r0, r0 + run.dy * (len - 1)) - 1,
+      Math.max(c0, c0 + run.dx * (len - 1)) + 1, Math.max(r0, r0 + run.dy * (len - 1)) + 1);
     boulders++;
   }
 
@@ -312,7 +240,94 @@ export function generateMap(options: GenerateOptions): GameMap {
     reserve(Math.min(c, c + d.dx) - 1, Math.min(r, r + d.dy) - 1, Math.max(c, c + d.dx) + 1, Math.max(r, r + d.dy) + 1);
     gates++;
   }
-  base.obstacles = obstacles;
+
+  // 6. Finish: the cell that is the longest walk from the start.
+  const base: GameMap = {
+    schema: 1,
+    id: `gen${GENERATOR_VERSION}-${size}-${seed}`,
+    name: `${MAP_SIZES[size].label} run “${seed}”`,
+    version: GENERATOR_VERSION,
+    width,
+    height,
+    tiles,
+    startPositions,
+    finish: { x: 0, y: 0, w: 0, h: 0 },
+    checkpoints: [],
+    landmarks,
+    obstacles,
+    generator: { seed, size },
+  };
+  const fromStart = distanceField(base, { x: sx, y: sy, w: 5, h: 5 });
+  let best = -1;
+  let finishC = 0;
+  let finishR = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (reserved[r * cols + c]) continue;
+      const d = fromStart[(r * PITCH + 1) * width + c * PITCH + 1]!;
+      if (d > best) {
+        best = d;
+        finishC = c;
+        finishR = r;
+      }
+    }
+  }
+  base.finish = { x: finishC * PITCH + 1, y: finishR * PITCH + 1, w: 2, h: 2 };
+  reserve(finishC, finishR, finishC, finishR);
+
+  // 6b. Checkpoints: each one goes as far as possible (by walking distance) from
+  // the start, the finish and the checkpoints already placed.
+  const checkpointCount = options.checkpoints ?? MAP_SIZES[size].checkpoints;
+  const spread = [fromStart, distanceField(base, base.finish)];
+  for (let n = 0; n < checkpointCount; n++) {
+    let bestGap = -1;
+    let pickC = -1;
+    let pickR = -1;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (reserved[r * cols + c]) continue;
+        const tile = (r * PITCH + 1) * width + c * PITCH + 1;
+        let gap = Infinity;
+        for (const field of spread) gap = Math.min(gap, field[tile]!);
+        if (gap > bestGap) {
+          bestGap = gap;
+          pickC = c;
+          pickR = r;
+        }
+      }
+    }
+    if (pickC < 0) break;
+    const zone = { x: pickC * PITCH + 1, y: pickR * PITCH + 1, w: 2, h: 2 };
+    base.checkpoints.push(zone);
+    reserve(pickC, pickR, pickC, pickR);
+    spread.push(distanceField(base, zone));
+  }
+
+  // 7. Terrain patches: short runs of mud or ice along connected corridor cells.
+  let budget = Math.round(cols * rows * terrainShare);
+  for (let attempts = 0; budget > 0 && attempts < 300; attempts++) {
+    const terrain = rng.chance(0.5) ? Tile.Mud : Tile.Ice;
+    let c = rng.int(cols);
+    let r = rng.int(rows);
+    const run = 2 + rng.int(3);
+    for (let n = 0; n < run && budget > 0; n++) {
+      if (reserved[r * cols + c]) break;
+      fillCellsWhereFloor(c, r, terrain);
+      reserved[r * cols + c] = 1;
+      budget--;
+      const open = DIRS.filter((d) => inGrid(c + d.dx, r + d.dy) && isOpenBetween(c, r, d.dx, d.dy));
+      if (open.length === 0) break;
+      const d = rng.pick(open);
+      c += d.dx;
+      r += d.dy;
+    }
+  }
+  function fillCellsWhereFloor(c: number, r: number, t: number) {
+    for (let y = r * PITCH + 1; y <= r * PITCH + 2; y++) {
+      for (let x = c * PITCH + 1; x <= c * PITCH + 2; x++) if (get(x, y) === Tile.Floor) set(x, y, t);
+    }
+  }
+
 
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);

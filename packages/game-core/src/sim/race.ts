@@ -2,7 +2,7 @@ import { type GameConfig, DEFAULT_CONFIG } from '../config';
 import { type GameMap, inRect, isSolid, tileAt } from '../map/types';
 import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
-import { closedGateCheck, hitObstacles, obstacleTime } from './obstacles';
+import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstacles';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -211,6 +211,7 @@ export function stepPlayer(
     if (p.exhausted && p.stamina >= sprint.recoverThreshold) p.exhausted = false;
   }
 
+  gateTraps(state, p, events);
   const beforeX = p.x;
   const beforeY = p.y;
   const impact = movePlayer(map, config, p, input, dt, closedGateCheck(map, config, obstacleTime(state)));

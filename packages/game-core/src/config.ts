@@ -64,7 +64,7 @@ export interface GameConfig {
     /** `armLength` is from the post to each end of the bar. */
     barrier: { armLength: number; thickness: number; turnSeconds: number };
     gate: { openSeconds: number; closedSeconds: number };
-    /** Hearts lost when a boulder or barrier hits you. */
+    /** Hearts lost when a boulder or barrier hits you, or a gate closes on you. */
     hitDamage: number;
     hitStunSeconds: number;
     /** Speed you are shoved away at. */
@@ -124,7 +124,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   ghost: { sampleEveryTicks: 3 },
   obstacles: {
     boulder: { radius: 0.9, speed: 3 },
-    barrier: { armLength: 2, thickness: 0.3, turnSeconds: 5 },
+    barrier: { armLength: 2, thickness: 0.3, turnSeconds: 4 },
     gate: { openSeconds: 3, closedSeconds: 2.5 },
     hitDamage: 1,
     hitStunSeconds: 0.5,
