@@ -71,7 +71,7 @@ export interface GameConfig {
     reversed: { seconds: number };
     /** Controls are turned a quarter turn. Loss of control. */
     confused: { seconds: number };
-    /** Vision shrinks to this share of its normal size. */
+    /** Vision shrinks to this share of its normal size, and remembered tiles are hidden. */
     blind: { seconds: number; visionMul: number };
     /** After a loss-of-control effect ends, no new one can start for this long. */
     controlGuardSeconds: number;
@@ -108,7 +108,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     stun: { seconds: 0.8 },
     reversed: { seconds: 1 },
     confused: { seconds: 1 },
-    blind: { seconds: 4, visionMul: 0.4 },
+    blind: { seconds: 6, visionMul: 0.2 },
     controlGuardSeconds: 1.5,
   },
 };

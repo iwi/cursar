@@ -10,6 +10,7 @@ import {
   computeVisibility,
   createAutopilot,
   effectiveVision,
+  hasEffect,
 } from '@cursar/game-core';
 import { EFFECT_STYLE } from './effects';
 import Phaser from 'phaser';
@@ -462,7 +463,8 @@ export class RaceScene extends Phaser.Scene {
     const { map } = this.data_;
     const racing = this.racingView();
     const me = this.me();
-    const memory = state.config.vision.memorySeconds;
+    // Blinded, you lose your memory of the map too, until the effect ends.
+    const memory = hasEffect(me, 'blind') ? 0 : state.config.vision.memorySeconds;
 
     if (racing) {
       computeVisibility(map, me.x, me.y, me.facing, effectiveVision(state.config, me), visible);
