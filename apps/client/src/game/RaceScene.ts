@@ -17,9 +17,14 @@ import {
   effectiveVision,
   gateClosed,
   hasEffect,
+  type ActiveSkill,
+  ACTIVE_SKILLS,
+  SKILLS,
+  maxHearts,
   obstacleTime,
   patrollerPosition,
   trapArmed,
+  trapSenses,
 } from '@cursar/game-core';
 import { ENEMY_LABEL, EFFECT_STYLE, TRAP_STYLE } from './effects';
 import Phaser from 'phaser';
@@ -149,6 +154,8 @@ export class RaceScene extends Phaser.Scene {
   private ghostLast: { x: number; y: number } | null = null;
   private rumbleTimer = 0;
   private tellTimer = 0;
+  /** An active skill key pressed, sent with the next tick's input. */
+  private pendingUse: ActiveSkill | undefined;
   /** "You" above the local runner at the start, so everyone finds themselves at once. */
   private youLabel: Phaser.GameObjects.Text | null = null;
   /** Per patroller (map enemy index): where it was and how far it has walked since its last step sound. */
@@ -192,6 +199,9 @@ export class RaceScene extends Phaser.Scene {
     }
     keyboard.on('keydown-ENTER', () => driver.ready());
     keyboard.on('keydown-M', () => this.toggleMap());
+    // Skill cards: 1, 2, 3. Active skills: their own keys.
+    (['ONE', 'TWO', 'THREE'] as const).forEach((key, slot) => keyboard.on(`keydown-${key}`, () => this.pick(slot)));
+    for (const skill of ACTIVE_SKILLS) keyboard.on(`keydown-${SKILLS[skill].key}`, () => (this.pendingUse = skill));
     keyboard.on('keydown-BACKSPACE', () => {
       if (this.state.phase === 'preview' && driver.removeLastMarker()) this.data_.audio.click();
     });
@@ -216,6 +226,8 @@ export class RaceScene extends Phaser.Scene {
       bridge.on('setPaused', (paused) => driver.setPaused(paused)),
       bridge.on('testEffect', (kind) => driver.testEffect?.(kind)),
       bridge.on('toggleMap', () => this.toggleMap()),
+      bridge.on('pick', (slot) => this.pick(slot)),
+      bridge.on('testPoints', () => driver.testPoints?.()),
       bridge.on('testHurt', () => driver.testHurt?.()),
     );
     const onBlur = () => driver.setPaused(true);
@@ -242,6 +254,11 @@ export class RaceScene extends Phaser.Scene {
   /** True while the local runner is racing with a restricted view. */
   private racingView(): boolean {
     return this.state.phase === 'racing' && !this.me().finished;
+  }
+
+  /** Takes a card from the offer, during the race. */
+  private pick(slot: number): void {
+    if (this.racingView() && !this.driver.paused && this.me().offer) this.driver.pick(slot);
   }
 
   /** True while the full map is open during the race. */
@@ -294,6 +311,8 @@ export class RaceScene extends Phaser.Scene {
   private readIntent(): MoveIntent {
     // Looking at the full map costs time: the runner cannot move meanwhile.
     if (this.peeking()) return { mx: 0, my: 0, sprint: false };
+    const use = this.pendingUse;
+    this.pendingUse = undefined;
     if (this.autopilot) {
       const { mx, my, sprint } = this.autopilot(this.me());
       return { mx, my, sprint };
@@ -303,6 +322,7 @@ export class RaceScene extends Phaser.Scene {
       mx: (down('right') ? 1 : 0) - (down('left') ? 1 : 0),
       my: (down('down') ? 1 : 0) - (down('up') ? 1 : 0),
       sprint: down('sprint'),
+      use,
     };
   }
 
@@ -366,6 +386,21 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'foeHeard':
         audio.foe(event.sound, event.pan, event.closeness, event.aimed);
+        break;
+      case 'treasure':
+        if (event.playerId === me.id) audio.treasure();
+        break;
+      case 'offer':
+        if (event.playerId === me.id) audio.offer();
+        break;
+      case 'skill':
+        if (event.playerId === me.id) {
+          audio.skill();
+          bridge.emit('notice', SKILLS[event.skill].name);
+        }
+        break;
+      case 'skillUsed':
+        if (event.playerId === me.id) audio.skillUsed(event.skill);
         break;
       case 'hurt':
         if (event.playerId === me.id) {
@@ -464,7 +499,7 @@ export class RaceScene extends Phaser.Scene {
     this.tellTimer = 0.5;
     const { state } = this;
     const me = this.me();
-    const range = state.config.traps.tellDistance;
+    const range = trapSenses(state.config, me).tell;
     let nearest: { dx: number; dist: number } | null = null;
     (this.data_.map.traps ?? []).forEach((trap, i) => {
       if (!trapArmed(state, i)) return;
@@ -619,7 +654,7 @@ export class RaceScene extends Phaser.Scene {
     const racing = this.racingView();
     const me = this.me();
     // Blinded, you lose your memory of the map too, until the effect ends.
-    const memory = hasEffect(me, 'blind') ? 0 : state.config.vision.memorySeconds;
+    const memory = hasEffect(me, 'blind') ? 0 : effectiveVision(state.config, me).memorySeconds;
 
     if (racing) {
       computeVisibility(map, me.x, me.y, me.facing, effectiveVision(state.config, me), visible);
@@ -805,9 +840,17 @@ export class RaceScene extends Phaser.Scene {
       }
     }
 
-    this.drawTraps(g);
+    this.drawTreasures(g);
+    this.drawTraps(g, top);
     this.drawObstacles(g);
-    this.drawEnemies(g);
+    this.drawEnemies(g, top);
+    for (const d of this.driver.decoys()) {
+      if (!this.isVisibleTile(d.x, d.y)) continue;
+      // A decoy: a flickering outline of a runner.
+      const a = 0.4 + 0.3 * Math.sin(this.time.now / 90);
+      g.lineStyle(3, me.color, a).strokeCircle(d.x * PX, d.y * PX, state.config.player.radius * PX * 1.2);
+      g.fillStyle(me.color, a * 0.4).fillCircle(d.x * PX, d.y * PX, state.config.player.radius * PX);
+    }
 
     // Rivals. In a race the server only sends the ones inside your view.
     const r = state.config.player.radius * PX;
@@ -905,7 +948,7 @@ export class RaceScene extends Phaser.Scene {
    * turrets and bolts come from the driver (in network play, only those in
    * view). During the race only what is inside your view is drawn.
    */
-  private drawEnemies(g: Phaser.GameObjects.Graphics): void {
+  private drawEnemies(g: Phaser.GameObjects.Graphics, top: Phaser.GameObjects.Graphics): void {
     const { state } = this;
     const { config } = state;
     const spawns = this.data_.map.enemies ?? [];
@@ -920,16 +963,20 @@ export class RaceScene extends Phaser.Scene {
         g.lineStyle(3, 0x8e5bd6, 0.45).lineBetween(e.ax * PX, e.ay * PX, e.bx * PX, e.by * PX);
       }
       const at = patrollerPosition(config, e, t);
-      if (!this.isVisibleTile(at.x, at.y)) return;
+      // The Reveal skill shows patrollers close by through the fog.
+      const me = this.me();
+      const revealed = !this.isVisibleTile(at.x, at.y) && this.revealing() && Math.hypot(at.x - me.x, at.y - me.y) <= config.skills.reveal.range;
+      if (!this.isVisibleTile(at.x, at.y) && !revealed) return;
+      const pen = revealed ? top : g;
       const r = config.enemies.patroller.radius * PX * k;
       const x = at.x * PX;
       const y = at.y * PX;
       const heading = Math.atan2(e.by - e.ay, e.bx - e.ax);
       // A purple diamond with a pointer.
       const pts = [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].map((a) => ({ x: x + Math.cos(a + heading) * r * 1.25, y: y + Math.sin(a + heading) * r * 1.25 }));
-      g.fillStyle(0x8e5bd6, 1).fillPoints(pts, true);
-      g.lineStyle(2, 0x2a1640, 1).strokePoints(pts, true, true);
-      g.fillStyle(0xffe066, 1).fillCircle(x, y, r * 0.35);
+      pen.fillStyle(0x8e5bd6, 1).fillPoints(pts, true);
+      pen.lineStyle(2, 0x2a1640, 1).strokePoints(pts, true, true);
+      pen.fillStyle(0xffe066, 1).fillCircle(x, y, r * 0.35);
     });
     // The full map during the race shows where turrets stand and chasers live
     // (that is part of the map), never where a chaser is now.
@@ -975,20 +1022,48 @@ export class RaceScene extends Phaser.Scene {
    * trap shows only when you are close to it; a sprung one shows wherever you
    * can see it (it is safe until it re-arms).
    */
-  private drawTraps(g: Phaser.GameObjects.Graphics): void {
+  private drawTraps(g: Phaser.GameObjects.Graphics, top: Phaser.GameObjects.Graphics): void {
     const { state } = this;
     const me = this.me();
     const all = !this.racingView() || this.peeking();
-    const reveal = state.config.traps.revealDistance;
+    const reveal = trapSenses(state.config, me).reveal;
+    const revealing = this.revealing();
     (this.data_.map.traps ?? []).forEach((trap, i) => {
       const armed = trapArmed(state, i);
       const cx = trap.x + 0.5;
       const cy = trap.y + 0.5;
+      // The Reveal skill shows traps close by through the fog.
+      if (!all && revealing && Math.hypot(cx - me.x, cy - me.y) <= state.config.skills.reveal.range) {
+        this.drawTrap(top, trap, armed, 1);
+        return;
+      }
       if (!all) {
         if (!this.isVisibleTile(cx, cy)) return;
         if (armed && Math.hypot(cx - me.x, cy - me.y) > reveal) return;
       }
       this.drawTrap(g, trap, armed, all ? 1.8 : 1);
+    });
+  }
+
+  /** The Reveal skill is showing hazards close by. */
+  private revealing(): boolean {
+    return this.racingView() && this.me().revealTime > 0;
+  }
+
+  /** Treasures: gold coins, until this runner has collected them. Seen like the ground (they never move). */
+  private drawTreasures(g: Phaser.GameObjects.Graphics): void {
+    const me = this.me();
+    const whole = !this.racingView() || this.peeking();
+    const k = whole ? 1.8 : 1;
+    const spin = Math.abs(Math.sin(this.time.now / 300));
+    (this.data_.map.treasures ?? []).forEach((t, i) => {
+      if (me.treasures[i]) return;
+      const x = t.x * PX;
+      const y = t.y * PX;
+      const r = PX * 0.28 * k;
+      g.fillStyle(0xffd23f, 0.25).fillCircle(x, y, r * 1.6);
+      g.fillStyle(0xffc21a, 1).fillEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
+      g.lineStyle(2, 0x8a5a00, 1).strokeEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
     });
   }
 
@@ -1190,7 +1265,11 @@ export class RaceScene extends Phaser.Scene {
       spectating: state.phase === 'racing' && me.finished,
       mapOpen: this.peeking(),
       health: me.health,
-      healthMax: state.config.health.hearts,
+      healthMax: maxHearts(state.config, me),
+      points: me.points,
+      threat: me.threat,
+      offer: me.offer?.map((id) => ({ ...SKILLS[id], affordable: SKILLS[id].cost <= me.points })) ?? null,
+      actives: ACTIVE_SKILLS.filter((id) => me.skills.includes(id)).map((id) => ({ id, name: SKILLS[id].name, key: SKILLS[id].key!, cooldown: me.cooldowns[id] ?? 0 })),
       effects: me.effects.map((e) => ({ kind: e.kind, left: e.time, total: e.total })),
       readiness: this.driver.readiness(),
     });

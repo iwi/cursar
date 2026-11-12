@@ -1,4 +1,4 @@
-import type { EffectKind, RacePhase } from '@cursar/game-core';
+import type { ActiveSkill, EffectKind, RacePhase, SkillId } from '@cursar/game-core';
 
 /** What the HUD needs to know, sent from the game scene to the React interface. */
 export interface HudState {
@@ -24,6 +24,13 @@ export interface HudState {
   spectating: boolean;
   health: number;
   healthMax: number;
+  /** Skill points to spend, and threat (the sum of the taken cards' threat). */
+  points: number;
+  threat: number;
+  /** Cards on offer, or null. */
+  offer: { id: SkillId; name: string; text: string; cost: number; threat: number; affordable: boolean }[] | null;
+  /** Active skills taken: their key and seconds until usable (0 = ready). */
+  actives: { id: ActiveSkill; name: string; key: string; cooldown: number }[];
   /** Effects on the local runner: seconds left and in all. */
   effects: { kind: EffectKind; left: number; total: number }[];
   /** Who is ready during the preview (network play only). */
@@ -45,6 +52,10 @@ interface BridgeEvents {
   testHurt: undefined;
   /** Open or close the full map during the race. */
   toggleMap: undefined;
+  /** Take card 0, 1 or 2 of the skill offer (a click on the card). */
+  pick: number;
+  /** Tuning panel (solo only): three skill points and a deal of cards, to try them. */
+  testPoints: undefined;
 }
 
 type Handler<T> = (payload: T) => void;

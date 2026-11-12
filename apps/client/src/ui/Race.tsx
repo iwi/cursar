@@ -110,7 +110,7 @@ export function Race({ map, config, settings, onChange, onRetry, onNewMap, onMen
             </div>
           )}
 
-          {showTuning && <Tuning config={config} onClose={() => setShowTuning(false)} onEffect={(kind) => bridge.emit('testEffect', kind)} onHurt={() => bridge.emit('testHurt')} />}
+          {showTuning && <Tuning config={config} onClose={() => setShowTuning(false)} onEffect={(kind) => bridge.emit('testEffect', kind)} onHurt={() => bridge.emit('testHurt')} onPoints={() => bridge.emit('testPoints')} />}
         </>
       )}
     </RaceView>

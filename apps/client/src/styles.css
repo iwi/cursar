@@ -191,6 +191,22 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .ready-row { display: grid; gap: 10px; }
 .ready-row button.active { border-color: var(--good); color: var(--good); }
 .ready-count { margin: 0; text-align: center; color: var(--muted); font-size: 14px; }
+.purse { display: flex; align-items: center; gap: 6px; color: #ffd23f; }
+.purse .coin { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ffc21a; box-shadow: 0 0 0 2px #8a5a00 inset; }
+.purse .threat { margin-left: 8px; color: #ff8a65; }
+.cards { display: flex; gap: 8px; pointer-events: auto; }
+.card {
+  display: grid; gap: 2px; width: 170px; padding: 8px 10px; text-align: left; font-size: 13px;
+  background: rgba(21, 25, 34, 0.95); border: 2px solid var(--accent); border-radius: 10px; color: var(--text);
+}
+.card kbd { justify-self: start; }
+.card strong { font-size: 15px; }
+.card span { color: var(--muted); }
+.card small { color: #ffd23f; }
+.card.dim { opacity: 0.45; border-color: var(--panel-edge); }
+.actives { display: flex; gap: 8px; font-size: 13px; }
+.active-skill { padding: 3px 8px; border: 1px solid var(--good); border-radius: 999px; background: rgba(21, 25, 34, 0.85); color: var(--text); }
+.active-skill.cooling { border-color: var(--panel-edge); opacity: 0.7; }
 .hearts { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
 .hearts i { font-style: normal; color: rgba(255, 255, 255, 0.18); }
 .hearts i.full { color: #ff5a6e; }

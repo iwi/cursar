@@ -5,6 +5,8 @@ import { movePlayer } from './movement';
 import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstacles';
 import { springTraps } from './traps';
 import { createFoes, hitPatrollers, stepEnemies } from './enemies';
+import { maxHearts } from './health';
+import { offerSkills, tickSkills, useSkill } from './skills';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -40,6 +42,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
     foes: createFoes(map),
     bolts: [],
     nextBoltId: 1,
+    decoys: [],
     players: players.map((setup, i): PlayerState => {
       const start = map.startPositions[setup.slot ?? i];
       if (!start) throw new Error(`No start position for slot ${setup.slot ?? i}.`);
@@ -71,6 +74,15 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         respawnY: start.y,
         safeTime: 0,
         hitGuard: 0,
+        treasures: (map.treasures ?? []).map(() => false),
+        points: 0,
+        skills: [],
+        threat: 0,
+        offer: null,
+        offersMade: 0,
+        cooldowns: {},
+        dashTime: 0,
+        revealTime: 0,
         finished: false,
         finishTime: null,
       };
@@ -195,6 +207,8 @@ export function stepPlayer(
   predict = false,
 ): void {
   const { config, map } = state;
+  tickSkills(p, dt);
+  if (input.use) useSkill(state, p, input.use, events);
   // Effects such as stun or reversed controls change what the input does.
   input = controlledInput(p, input);
   const moving = Math.hypot(input.mx, input.my) > 0.01;
@@ -203,7 +217,7 @@ export function stepPlayer(
   const sprint = config.sprint;
   p.sprinting = input.sprint && moving && !p.exhausted && p.stamina > 0;
   if (p.sprinting) {
-    p.stamina -= sprint.drainPerSec * dt;
+    p.stamina -= sprint.drainPerSec * (p.skills.includes('deepLungs') ? config.skills.deepLungsDrainMul : 1) * dt;
     p.regenDelay = sprint.regenDelay;
     if (p.stamina <= 0) {
       p.stamina = 0;
@@ -214,7 +228,7 @@ export function stepPlayer(
   } else if (p.regenDelay > 0) {
     p.regenDelay -= dt;
   } else {
-    p.stamina = Math.min(sprint.staminaMax, p.stamina + sprint.regenPerSec * dt);
+    p.stamina = Math.min(sprint.staminaMax, p.stamina + sprint.regenPerSec * (p.skills.includes('deepLungs') ? config.skills.deepLungsRegenMul : 1) * dt);
     if (p.exhausted && p.stamina >= sprint.recoverThreshold) p.exhausted = false;
   }
 
@@ -267,7 +281,7 @@ export function stepPlayer(
       p.checkpoints[index] = true;
       touched.push(index);
       // A new checkpoint restores full health and becomes the respawn point.
-      p.health = config.health.hearts;
+      p.health = maxHearts(config, p);
       p.respawnX = zone.x + zone.w / 2;
       p.respawnY = zone.y + zone.h / 2;
     } else {
@@ -275,6 +289,16 @@ export function stepPlayer(
     }
   });
   for (const index of touched) events.push({ type: 'checkpoint', playerId: p.id, index, remaining });
+
+  // Treasures: a point each, for this runner only.
+  map.treasures?.forEach((t, index) => {
+    if (p.treasures[index] || Math.hypot(t.x - p.x, t.y - p.y) > config.treasures.reach) return;
+    p.treasures[index] = true;
+    p.points += config.treasures.pointsEach;
+    events.push({ type: 'treasure', playerId: p.id, index, points: p.points });
+  });
+  // A checkpoint with points to spend deals skill cards.
+  if (touched.length > 0) offerSkills(state, p, events);
 
   p.noticeCooldown = Math.max(0, p.noticeCooldown - dt);
   if (inRect(map.finish, p.x, p.y)) {

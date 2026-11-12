@@ -1,9 +1,10 @@
 import type { GameConfig } from '../config';
 import { MAP_SIZES, type MapSize } from '../map/generate';
+import { ACTIVE_SKILLS, type ActiveSkill } from '../sim/skills';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -135,7 +136,9 @@ export type ClientMessage =
   | { t: 'addBot'; level: BotLevel }
   /** Host: remove a computer player, or a person (who cannot rejoin this room from the same page). */
   | { t: 'remove'; id: string }
-  | { t: 'input'; seq: number; mx: number; my: number; sprint: boolean }
+  | { t: 'input'; seq: number; mx: number; my: number; sprint: boolean; use?: ActiveSkill }
+  /** Take card 0, 1 or 2 of the skill offer. */
+  | { t: 'pick'; slot: number }
   | { t: 'marker'; x: number; y: number }
   | { t: 'unmarker' }
   /** Done studying the preview. */
@@ -181,6 +184,8 @@ export type ServerMessage =
       foes: FoeView[];
       /** Turret bolts inside your view: flat id, x, y. */
       bolts: number[];
+      /** Decoys inside your view: flat x, y. */
+      decoys: number[];
       readyCount: number;
       /** The host has frozen the race. */
       paused: boolean;
@@ -257,7 +262,10 @@ export function parseClientMessage(text: string): ClientMessage | null {
         mx: Math.max(-1, Math.min(1, m.mx)),
         my: Math.max(-1, Math.min(1, m.my)),
         sprint: m.sprint === true,
+        ...(typeof m.use === 'string' && (ACTIVE_SKILLS as readonly string[]).includes(m.use) ? { use: m.use as ActiveSkill } : {}),
       };
+    case 'pick':
+      return isNumber(m.slot) && [0, 1, 2].includes(m.slot) ? { t: 'pick', slot: m.slot } : null;
     case 'marker':
       return isNumber(m.x) && isNumber(m.y) ? { t: 'marker', x: m.x, y: m.y } : null;
     default:

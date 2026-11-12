@@ -1,4 +1,5 @@
 import {
+  type ActiveSkill,
   type EffectKind,
   type GameConfig,
   type GameEvent,
@@ -10,6 +11,8 @@ import {
   createRace,
   damage,
   hearFoe,
+  offerSkills,
+  pickSkill,
   placeMarker,
   removeLastMarker,
   resumeRace,
@@ -22,6 +25,8 @@ export interface MoveIntent {
   mx: number;
   my: number;
   sprint: boolean;
+  /** An active skill whose key was pressed since the last tick. */
+  use?: ActiveSkill;
 }
 
 export interface Rival {
@@ -90,6 +95,10 @@ export interface RaceDriver {
   foes(): FoeSprite[];
   /** Turret bolts in flight. */
   bolts(): { x: number; y: number }[];
+  /** Decoys known to this page. */
+  decoys(): { x: number; y: number }[];
+  /** Take card 0, 1 or 2 of the skill offer. */
+  pick(slot: number): void;
   ghost(): { x: number; y: number; facing: number } | null;
   /** Routes to reveal once the race is over, or null until they are known. */
   routes(): Track[] | null;
@@ -106,6 +115,8 @@ export interface RaceDriver {
   testEffect?(kind: EffectKind): void;
   /** Solo only: take a heart from the local runner, from the Tuning panel. */
   testHurt?(): void;
+  /** Solo only: give the local runner skill points, from the Tuning panel. */
+  testPoints?(): void;
   destroy(): void;
 }
 
@@ -205,6 +216,21 @@ export class LocalDriver implements RaceDriver {
 
   bolts() {
     return this.state.bolts.map((b) => ({ x: b.x, y: b.y }));
+  }
+
+  decoys() {
+    return this.state.decoys.map((d) => ({ x: d.x, y: d.y }));
+  }
+
+  pick(slot: number): void {
+    pickSkill(this.state, LOCAL_ID, slot, this.queued);
+  }
+
+  testPoints(): void {
+    if (this.state.phase !== 'racing') return;
+    this.me.points += 3;
+    // Deal cards at once, as if at a checkpoint, so they can be tried straight away.
+    offerSkills(this.state, this.me, this.queued);
   }
 
   ghost() {

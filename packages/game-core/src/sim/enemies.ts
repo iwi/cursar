@@ -4,6 +4,7 @@ import { type EnemySpawn, type GameMap, type Point, isSolid } from '../map/types
 import { applyEffect } from './effects';
 import { resolveWalls } from './movement';
 import { closedGateCheck, knock, obstacleTime } from './obstacles';
+import { wakeRange } from './skills';
 import { lineOfSight } from './visibility';
 import type { ChaserState, FoeSound, FoeState, GameEvent, PlayerState, RaceState, TurretState } from './types';
 
@@ -77,18 +78,46 @@ function quarry(state: RaceState): PlayerState[] {
   return state.players.filter((p) => !p.finished && p.safeTime <= 0);
 }
 
-/** The nearest runner within `range` that can be seen from (x, y). */
-function nearestInSight(state: RaceState, x: number, y: number, range: number): PlayerState | null {
-  let best: PlayerState | null = null;
-  let bestDist = range;
-  for (const p of quarry(state)) {
-    const d = Math.hypot(p.x - x, p.y - y);
-    if (d <= bestDist && lineOfSight(state.map, x, y, p.x, p.y)) {
-      best = p;
+/** Something an enemy can go after: a runner, or a decoy (id `decoy:<owner>`). */
+interface Target {
+  id: string;
+  x: number;
+  y: number;
+  player: PlayerState | null;
+}
+
+/**
+ * What an enemy at (x, y) goes after, among what it can see within range:
+ * a decoy first, then the runner with the highest threat, then the nearest.
+ * `range` may depend on the runner (null for a decoy).
+ */
+function chooseTarget(state: RaceState, x: number, y: number, range: (p: PlayerState | null) => number): Target | null {
+  let best: Target | null = null;
+  let bestRank = -1;
+  let bestDist = Infinity;
+  const consider = (target: Target, rank: number, reach: number) => {
+    const d = Math.hypot(target.x - x, target.y - y);
+    if (d > reach || !lineOfSight(state.map, x, y, target.x, target.y)) return;
+    if (rank > bestRank || (rank === bestRank && d < bestDist)) {
+      best = target;
+      bestRank = rank;
       bestDist = d;
     }
-  }
+  };
+  for (const d of state.decoys) consider({ id: `decoy:${d.owner}`, x: d.x, y: d.y, player: null }, Infinity, range(null));
+  for (const p of quarry(state)) consider({ id: p.id, x: p.x, y: p.y, player: p }, p.threat, range(p));
   return best;
+}
+
+/** Finds a target again by id, or null if it is gone (finished, safe, or a decoy that ran out). */
+function findTarget(state: RaceState, id: string | null): Target | null {
+  if (!id) return null;
+  if (id.startsWith('decoy:')) {
+    const d = state.decoys.find((dec) => `decoy:${dec.owner}` === id);
+    return d ? { id, x: d.x, y: d.y, player: null } : null;
+  }
+  const p = quarry(state).find((pl) => pl.id === id);
+  return p ? { id, x: p.x, y: p.y, player: p } : null;
 }
 
 /** Walking-distance fields to each chaser's home, worked out once per map. */
@@ -132,7 +161,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
     // Still resting after a catch: it does not wake yet.
     c.timer = Math.max(0, c.timer - dt);
     if (c.timer > 0) return;
-    const prey = nearestInSight(state, c.x, c.y, cfg.wakeRange);
+    const prey = chooseTarget(state, c.x, c.y, (p) => (p ? wakeRange(config, p) : cfg.sightRange));
     if (prey) {
       c.mode = 'chase';
       c.target = prey.id;
@@ -146,8 +175,8 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
   }
 
   if (c.mode === 'chase') {
-    const prey = state.players.find((p) => p.id === c.target);
-    if (!prey || prey.finished || prey.safeTime > 0) {
+    const prey = findTarget(state, c.target);
+    if (!prey) {
       goHome(c, 0);
       return;
     }
@@ -172,11 +201,15 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
     // Caught: a heart and a stun, then it rests and walks home.
     const reach = cfg.radius + config.player.radius;
     const gap = Math.hypot(prey.x - c.x, prey.y - c.y);
-    if (gap < reach && prey.hitGuard <= 0) {
+    if (gap < reach && !prey.player) {
+      // A decoy: it pops, and the fooled chaser rests and goes home, which gives the runner time to get away.
+      state.decoys = state.decoys.filter((d) => `decoy:${d.owner}` !== prey.id);
+      goHome(c, cfg.restSeconds);
+    } else if (gap < reach && prey.player && prey.player.hitGuard <= 0) {
       const nx = gap > 1e-6 ? (prey.x - c.x) / gap : Math.cos(c.facing);
       const ny = gap > 1e-6 ? (prey.y - c.y) / gap : Math.sin(c.facing);
       events.push({ type: 'enemyHit', playerId: prey.id, kind: 'chaser' });
-      knock(state, prey, c.x + nx * (reach + 0.05), c.y + ny * (reach + 0.05), nx, ny, config.obstacles.hitDamage, cfg.stunSeconds, events);
+      knock(state, prey.player, c.x + nx * (reach + 0.05), c.y + ny * (reach + 0.05), nx, ny, config.obstacles.hitDamage, cfg.stunSeconds, events);
       goHome(c, cfg.restSeconds);
     }
     return;
@@ -185,7 +218,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
   // Returning: walk home along the shortest way; once rested, a runner in sight wakes it again.
   c.timer -= dt;
   if (c.timer <= 0) {
-    const prey = nearestInSight(state, c.x, c.y, cfg.wakeRange);
+    const prey = chooseTarget(state, c.x, c.y, (p) => (p ? wakeRange(config, p) : cfg.sightRange));
     if (prey) {
       c.mode = 'chase';
       c.target = prey.id;
@@ -231,7 +264,7 @@ function goHome(c: ChaserState, rest: number): void {
 function stepTurret(state: RaceState, index: number, at: Point, tu: TurretState, dt: number, events: GameEvent[]): void {
   const cfg = state.config.enemies.turret;
   tu.reload = Math.max(0, tu.reload - dt);
-  const prey = nearestInSight(state, at.x, at.y, cfg.range);
+  const prey = chooseTarget(state, at.x, at.y, () => cfg.range);
   tu.target = prey?.id ?? null;
   if (!prey) {
     tu.charge = -1;
@@ -284,8 +317,11 @@ function stepBolts(state: RaceState, dt: number, events: GameEvent[]): void {
   });
 }
 
-/** Moves chasers, turns and fires turrets, and flies bolts: one tick, during the race only. */
+/** Counts down decoys, moves chasers, turns and fires turrets, and flies bolts: one tick, during the race only. */
 export function stepEnemies(state: RaceState, dt: number, events: GameEvent[]): void {
+  // Decoys run out.
+  for (const d of state.decoys) d.time -= dt;
+  state.decoys = state.decoys.filter((d) => d.time > 0);
   const spawns = state.map.enemies;
   if (!spawns || spawns.length === 0) return;
   spawns.forEach((spawn, index) => {

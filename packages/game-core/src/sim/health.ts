@@ -2,6 +2,11 @@ import type { GameConfig } from '../config';
 import { clearEffects } from './effects';
 import type { GameEvent, PlayerState } from './types';
 
+/** A runner's full health: the usual hearts, plus one with the Tough skill. */
+export function maxHearts(config: GameConfig, p: PlayerState): number {
+  return config.health.hearts + (p.skills.includes('tough') ? 1 : 0);
+}
+
 /**
  * Takes hearts from a runner (hazards, traps and enemies call this). Nothing
  * happens during the safe time after a respawn. Running out of hearts sends
@@ -25,7 +30,7 @@ export function respawn(config: GameConfig, p: PlayerState, events: GameEvent[])
   p.vx = 0;
   p.vy = 0;
   p.sprinting = false;
-  p.health = config.health.hearts;
+  p.health = maxHearts(config, p);
   p.safeTime = config.health.respawnSafeSeconds;
   clearEffects(p);
   events.push({ type: 'respawn', playerId: p.id, x: p.x, y: p.y });

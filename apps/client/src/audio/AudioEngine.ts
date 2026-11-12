@@ -265,6 +265,30 @@ export class AudioEngine {
     this.tone({ freq: 900, to: 300, dur: 0.08, vol: 0.18, type: 'square' });
   }
 
+  // --- Treasures and skills -------------------------------------------------
+
+  treasure(): void {
+    [1319, 1760, 2349].forEach((freq, i) => this.tone({ freq, dur: 0.18, vol: 0.14, type: 'triangle', delay: i * 0.05 }));
+  }
+
+  /** Skill cards on offer. */
+  offer(): void {
+    this.tone({ freq: 523, dur: 0.12, vol: 0.12, type: 'triangle' });
+    this.tone({ freq: 784, dur: 0.18, vol: 0.12, type: 'triangle', delay: 0.08 });
+  }
+
+  /** A card taken. */
+  skill(): void {
+    [392, 523, 659, 784].forEach((freq, i) => this.tone({ freq, dur: 0.16, vol: 0.14, type: 'square', delay: i * 0.04 }));
+  }
+
+  /** An active skill used. */
+  skillUsed(skill: string): void {
+    if (skill === 'dash') this.noise({ dur: 0.35, freq: 1800, q: 1, vol: 0.2, attack: 0.02 });
+    else if (skill === 'reveal') this.tone({ freq: 880, to: 1760, dur: 0.5, vol: 0.12, type: 'sine' });
+    else this.tone({ freq: 600, to: 300, dur: 0.25, vol: 0.15, type: 'triangle' });
+  }
+
   // --- Enemies --------------------------------------------------------------
 
   /** A patroller's heavy, regular step. */

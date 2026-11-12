@@ -8,15 +8,15 @@ export type MapSize = 'small' | 'medium' | 'large';
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
 export const MAP_SIZES: Record<
   MapSize,
-  { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; enemies: number; label: string }
+  { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; enemies: number; treasures: number; label: string }
 > = {
-  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, enemies: 3, label: 'Small' },
-  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, enemies: 4, label: 'Medium' },
-  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, enemies: 5, label: 'Large' },
+  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, enemies: 3, treasures: 6, label: 'Small' },
+  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, enemies: 4, treasures: 8, label: 'Medium' },
+  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, enemies: 5, treasures: 10, label: 'Large' },
 };
 
 /** Bumped whenever the generator changes, so saved ghosts never play on a different layout. */
-const GENERATOR_VERSION = 7;
+const GENERATOR_VERSION = 8;
 
 export interface GenerateOptions {
   seed: string;
@@ -33,6 +33,8 @@ export interface GenerateOptions {
   traps?: number;
   /** Number of enemies (defaults to the size's own count). */
   enemies?: number;
+  /** Number of treasures (defaults to the size's own count). */
+  treasures?: number;
 }
 
 const PITCH = 3;
@@ -404,6 +406,20 @@ export function generateMap(options: GenerateOptions): GameMap {
   }
   base.enemies = enemies;
 
+  // 10. Treasures, in plain cells away from the start and each other, dead
+  //     ends first: fetching one is a detour, so it is a route choice.
+  const treasureCount = options.treasures ?? MAP_SIZES[size].treasures;
+  const treasures: Point[] = [];
+  for (let n = 0; n < treasureCount; n++) {
+    const cells = freeCells();
+    if (cells.length === 0) break;
+    const ends = cells.filter(({ c, r }) => openSides(c, r) === 1);
+    const { c, r } = rng.pick(ends.length > 0 ? ends : cells);
+    treasures.push(centre(c, r));
+    reserve(c - 1, r - 1, c + 1, r + 1);
+  }
+  base.treasures = treasures;
+
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);
   return base;
@@ -444,6 +460,7 @@ export function flipMap(map: GameMap, flipX: boolean, flipY: boolean): GameMap {
       return { ...o, ...rect(o) };
     }),
     traps: map.traps?.map((t) => ({ ...t, x: flipX ? width - 1 - t.x : t.x, y: flipY ? height - 1 - t.y : t.y })),
+    treasures: map.treasures?.map((t) => ({ x: px(t.x), y: py(t.y) })),
     enemies: map.enemies?.map((e): EnemySpawn =>
       e.kind === 'patroller' ? { ...e, ax: px(e.ax), ay: py(e.ay), bx: px(e.bx), by: py(e.by) } : { ...e, x: px(e.x), y: py(e.y) },
     ),

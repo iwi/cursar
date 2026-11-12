@@ -34,7 +34,7 @@ Status key: **Built** = in the current project. **Agreed** = decided, not built 
 | Enemies | Decided 12 November. Placed by the map generator: **3 on small maps, 4 on medium, 5 on large**, taking turns by kind, in plain cells away from the start and from everything else. **Patrollers** walk a straight corridor of 3–5 cells back and forth (2 tiles a second) on a schedule, like a boulder, but slim enough to squeeze past by hugging the wall; touching one costs **a heart and a shove**. **Chasers** sleep in a dead end if one is free; a runner within 5 tiles and in sight wakes them, and they chase at 80% of a runner's top speed (4.4 tiles a second), so you slowly pull away. They **give up 2 s after losing sight of you** and walk home; catching you costs **a heart and a 0.8 s stun**, after which they rest for 3 s. **Turrets** stand in a cell, turn to face the nearest runner in sight within 9 tiles, whir for 0.8 s and fire a slow bolt (6 tiles a second) every 2.5 s; a bolt **slows you for 3 s** (no heart) and stops at walls, so you can dodge it or duck out of sight. Enemies ignore runners in their safe time. Sounds come before sight: a patroller's heavy steps, a chaser's snore (close by), its wake-up roar and its growl (higher when it is after you), a turret's whir and its shot. In network play the server sends each runner only the chasers, turrets and bolts in their view, and enemy sounds only as a direction and loudness. The preview shows them all, drawn larger with each patroller's beat marked; the full map during the race shows patrollers moving, turrets at their spots and chasers at their homes, never where a chaser is now. Computer players watch for patrollers like obstacles; chasers and turrets sometimes catch them, and they still finish. Later (Phase 4): enemies go after high-threat players first. | Built |
 | Computer players and obstacles | Computer players look a second ahead against the obstacles' known motion: they follow their route while it is clear, otherwise wait or step aside into a safe spot, and their route goes round barrier posts. If they make no progress for 4 s they go for it anyway, as a person would. Over 72 test races (Easy, Normal and Hard, 8 maps per size) every one finished, losing 0–19 s to obstacles with a hit now and then. Not built yet: the agreed randomness that makes them lose track of the route. | Built |
 | Player collision | Runners do not block each other. | Built |
-| Personal difficulty | A personal threat level: enemies prioritise high-threat players and traps trigger more easily for them. Replaces "more enemies for one player". | Agreed |
+| Personal difficulty | A personal threat level: enemies prioritise high-threat players and traps trigger more easily for them. Replaces "more enemies for one player". Built 12 November with the skill cards (section 2). | Built |
 | Effects | Temporary effects on a runner, for hazards, traps and skills to use (decided 12 November). Six kinds: **Slowed** (top speed ×0.6, 3 s), **Haste** (×1.3, 4 s), **Stunned** (cannot move, slides to a stop, 0.8 s), **Reversed** (controls point the opposite way, 2 s; lengthened from 1 s after play testing), **Confused** (controls turned a quarter turn, 1 s), **Blinded** (vision shrinks to 20% and remembered tiles are hidden until it ends, 6 s; the server also reveals less to a blinded player; changed 12 November after trying it, from 40% for 4 s with memory still showing). The same effect again keeps the longer time rather than stacking; different effects run side by side, and slow and haste multiply. Each has its own sound and colour, a ring round the runner (shrinking as it runs out) and a label above the stamina bar; rivals' effects show when they are in view. All numbers are first guesses, adjustable in the solo Tuning panel, which also has a button per effect to try it. | Built |
 | Loss-of-control effects | Stunned and Confused last about one second, Reversed two. They come one at a time: none can start while another is running, and after one ends the runner is guarded for 1.5 s, so a row of traps cannot keep them helpless (decided 12 November). Slowed and Blinded are not limited by the guard. A short cue sounds when control returns, another when the guard turns an effect away. | Built |
 | Series scoring | Cumulative points over a series of 1, 3, 5 or 7 races, a different map each race, with the host starting the next race from the results. Points by place: 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores 0. | Built |
@@ -65,7 +65,7 @@ Movement: confirmed good as built. No change.
 
 **Can facing be changed later?** Yes. Facing is one small rule in `packages/game-core/src/sim/movement.ts`; switching it to follow the mouse, or offering both as a setting, touches only that rule and the input reader.
 
-## 2. Spending skill points mid-race (agreed 11 November, not built yet)
+## 2. Spending skill points mid-race (agreed 11 November, built 12 November)
 
 The problem: opening a menu in a real-time race costs time, so players would either ignore skills or resent them.
 
@@ -78,6 +78,29 @@ Decision: **a one-key pick of three, at checkpoints, without stopping.**
 5. The three cards are drawn from a seeded per-player deck, so there is variety without unfairness.
 
 With 3 to 5 checkpoints per race this gives three to five picks, which is enough for a build to take shape without the race becoming a menu.
+
+Built 12 November as agreed, with these details (decided with the owner):
+
+- **Treasures**: 6 on small maps, 8 on medium, 10 on large, gold coins shown in the preview and in your view, often in dead ends so that fetching one is a detour. A point each; every runner collects their own.
+- **The offer**: touching a checkpoint with at least 1 point deals three cards from your own deck (seeded by the map and the runner, so the same race always deals the same), leaving out skills you have; at least one card is affordable, the others are dimmed. Press 1, 2 or 3 (or click). The offer waits until you choose, and a later checkpoint does not replace it.
+- **Skills** last the rest of the race; each can be taken once. Costs and threat are in `SKILLS` (sim/skills.ts), strengths in `config.skills`.
+
+| Skill | Effect | Cost | Threat |
+|---|---|---|---|
+| Navigation | Remembered tiles last 60 s instead of 25 | 1 | 1 |
+| Trap sense | Traps seen from 4 tiles and heard from 5 | 1 | 1 |
+| Wide eyes | Vision a quarter larger | 2 | 2 |
+| Fleet foot | 8% faster | 3 | 3 |
+| Deep lungs | Sprint drains 30% slower and recovers 30% faster | 2 | 2 |
+| Tough | A fourth heart, given at once | 2 | 2 |
+| Steady | Loss of control lasts half as long | 1 | 1 |
+| Dash (`Q`) | 0.6 s at 1.8× speed, every 8 s | 2 | 2 |
+| Reveal (`E`) | Traps and patrollers within 8 tiles shown through the fog for 4 s, every 15 s | 2 | 1 |
+| Decoy (`F`) | A fake left where you stand for 4 s: chasers and turrets go after it first; a chaser that reaches it is fooled and rests | 3 | 2 |
+
+- **Threat** is the sum of your cards' threat. Chasers and turrets go for the highest-threat runner in sight (decoys first); chasers wake half a tile further off per point (up to 3); traps catch you when you come within 0.05 tiles per point of their tile (up to 0.3, a brush) instead of only when you stand on it.
+- Computer players do not pick skills yet. Combat is left until skills have been played (decided 12 November).
+- The solo Tuning panel has a "Give 3 skill points and deal cards" button to try them.
 
 ## 3. Audio
 
@@ -141,13 +164,14 @@ Agreed for later phases:
 2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
 3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Played from different networks and it works well.*
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio. *Built 12 November: the effect system (six effects), health with checkpoint respawning, moving obstacles (boulders, barriers, gates), traps and enemies (patrollers, chasers, turrets). Phase 3 is complete apart from play-testing and tuning.*
-5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level.
+5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level. *Built 12 November: treasures, the skill deck and pick, threat. Combat: later, once skills have been played.*
 6. **Phase 5: map editor.** Using the same map format the generator already produces.
 7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts.
 8. **Phase 7–8: wider application, accounts, matchmaking, final graphics.**
 
 ## 6. Open questions
 
+- Skill costs, threat and strengths, and treasure counts, are first guesses (`SKILLS`, `config.skills`, `config.threat`, `MAP_SIZES`).
 - Enemy counts, speeds and ranges are first guesses, in `config.enemies` and `MAP_SIZES`.
 - Trap counts, effects and the 2-tile reveal are first guesses, in `config.traps` and `MAP_SIZES`.
 - Obstacle speeds, timings and counts are first guesses, in `config.obstacles` and `MAP_SIZES` (barrier speed, gate damage and counts tuned after the first play test).

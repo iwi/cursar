@@ -105,6 +105,8 @@ export interface GameMap {
   traps?: Trap[];
   /** Enemies. Optional, like obstacles. */
   enemies?: EnemySpawn[];
+  /** Treasures, a point each; every runner collects their own. Optional, like obstacles. */
+  treasures?: Point[];
   /** Present when the map came from the generator. */
   generator?: { seed: string; size: string };
 }

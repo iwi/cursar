@@ -27,6 +27,7 @@ import {
   createAutopilot,
   createRace,
   generateMap,
+  pickSkill,
   placeMarker,
   pointsForPlace,
   removeLastMarker,
@@ -302,7 +303,14 @@ export class Room {
         if (message.seq <= last.seq) return;
         // A client sending faster than the simulation runs gains nothing: old inputs are dropped.
         if (member.queue.length >= MAX_QUEUED_INPUTS) member.queue.splice(0, MAX_QUEUED_INPUTS / 2);
-        member.queue.push({ seq: message.seq, mx: message.mx, my: message.my, sprint: message.sprint });
+        member.queue.push({ seq: message.seq, mx: message.mx, my: message.my, sprint: message.sprint, use: message.use });
+        return;
+      }
+      case 'pick': {
+        const race = this.race;
+        if (!race || !member.inRace) return;
+        const events: GameEvent[] = [];
+        if (pickSkill(race.state, member.id, message.slot, events)) member.events.push(...events);
         return;
       }
       case 'marker':
@@ -449,8 +457,11 @@ export class Room {
       if (!m.send || state.resumeTime > 0) continue;
       const next = m.queue.shift();
       if (next) {
-        m.lastInput = next;
+        inputs[m.id] = next;
+        // A skill is used once: a repeated input (when the page falls behind) does not use it again.
+        m.lastInput = { seq: next.seq, mx: next.mx, my: next.my, sprint: next.sprint };
         m.starved = 0;
+        continue;
       } else if (++m.starved > INPUT_TIMEOUT_TICKS) {
         m.lastInput = { ...NO_INPUT, seq: m.lastInput.seq };
       }
@@ -557,6 +568,8 @@ export class Room {
       });
       const bolts: number[] = [];
       for (const b of state.bolts) if (inView(b.x, b.y)) bolts.push(b.id, round(b.x, 100), round(b.y, 100));
+      const decoys: number[] = [];
+      for (const d of state.decoys) if (inView(d.x, d.y)) decoys.push(round(d.x, 100), round(d.y, 100));
 
       member.send({
         t: 'snap',
@@ -572,6 +585,7 @@ export class Room {
         traps,
         foes,
         bolts,
+        decoys,
         readyCount,
         paused: this.paused,
         events: member.events,

@@ -1,4 +1,5 @@
 import type { GameConfig } from '../config';
+import type { ActiveSkill, SkillId } from './skills';
 import type { EnemyKind, GameMap, ObstacleKind, Point, TrapKind } from '../map/types';
 
 /** One tick of player intent. `seq` lets a server acknowledge inputs for client prediction. */
@@ -8,6 +9,8 @@ export interface PlayerInput {
   mx: number;
   my: number;
   sprint: boolean;
+  /** An active skill used on this tick (set on the tick its key was pressed). */
+  use?: ActiveSkill;
 }
 
 export const NO_INPUT: PlayerInput = { seq: 0, mx: 0, my: 0, sprint: false };
@@ -69,6 +72,22 @@ export interface PlayerState {
   safeTime: number;
   /** Seconds left in which obstacles pass through the runner, after being hit by one. */
   hitGuard: number;
+  /** One flag per map treasure: true once this runner has collected it. */
+  treasures: boolean[];
+  /** Points to spend on skills. */
+  points: number;
+  /** Skills taken this race. */
+  skills: SkillId[];
+  /** The sum of the taken skills' threat. */
+  threat: number;
+  /** Cards on offer, waiting for a pick, or null. */
+  offer: SkillId[] | null;
+  /** Offers made so far (each deals from the deck afresh). */
+  offersMade: number;
+  /** Seconds left before each active skill can be used again. */
+  cooldowns: Partial<Record<ActiveSkill, number>>;
+  dashTime: number;
+  revealTime: number;
   finished: boolean;
   finishTime: number | null;
 }
@@ -101,6 +120,14 @@ export interface TurretState {
 }
 
 export type FoeState = ChaserState | TurretState;
+
+export interface Decoy {
+  owner: string;
+  x: number;
+  y: number;
+  /** Seconds left. */
+  time: number;
+}
 
 export interface Bolt {
   id: number;
@@ -136,6 +163,8 @@ export interface RaceState {
   foes: (FoeState | null)[];
   /** Turret bolts in flight. */
   bolts: Bolt[];
+  /** Decoys left by runners: chasers and turrets go after them while they last. */
+  decoys: Decoy[];
   nextBoltId: number;
   players: PlayerState[];
 }
@@ -168,6 +197,11 @@ export type GameEvent =
   | { type: 'foeCue'; index: number; sound: FoeSound }
   /** An enemy sound as one listener hears it: a direction and loudness, never a position. `aimed`: it is after you. */
   | { type: 'foeHeard'; sound: FoeSound; pan: number; closeness: number; aimed: boolean }
+  | { type: 'treasure'; playerId: string; index: number; points: number }
+  /** Three cards on offer at a checkpoint. */
+  | { type: 'offer'; playerId: string; cards: SkillId[] }
+  | { type: 'skill'; playerId: string; skill: SkillId }
+  | { type: 'skillUsed'; playerId: string; skill: ActiveSkill }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */

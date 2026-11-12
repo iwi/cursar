@@ -636,3 +636,34 @@ describe('ready in the lobby', () => {
     expect(parseClientMessage('{"t":"lobbyReady","on":true}')).toEqual({ t: 'lobbyReady', on: true });
   });
 });
+
+describe('skills in a network race', () => {
+  it('takes a card the runner picks, and tells them', () => {
+    const { room, clients } = startRacing();
+    const [ana] = clients;
+    const me = room.raceState!.players[0]!;
+    me.points = 2;
+    me.offer = ['navigation', 'fleetFoot', 'tough'];
+    ana!.send({ t: 'pick', slot: 1 });
+    expect(me.skills).toEqual([]);
+    ana!.send({ t: 'pick', slot: 0 });
+    expect(me.skills).toEqual(['navigation']);
+    ticks(room, 3);
+    expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).map((e) => e.type)).toContain('skill');
+    expect(ana!.last('snap').you.skills).toEqual(['navigation']);
+  });
+
+  it('uses an active skill once even when the page falls behind and its input is repeated', () => {
+    const { room, clients } = startRacing();
+    const [ana] = clients;
+    const me = room.raceState!.players[0]!;
+    me.skills = ['decoy'];
+    ana!.send({ t: 'input', seq: 1000, mx: 0, my: 0, sprint: false, use: 'decoy' });
+    ticks(room, 5);
+    expect(room.raceState!.decoys).toHaveLength(1);
+    expect(me.cooldowns.decoy).toBeGreaterThan(0);
+    // A bogus skill name is dropped by the parser.
+    expect(parseClientMessage('{"t":"input","seq":1,"mx":0,"my":0,"use":"teleport"}')).not.toHaveProperty('use');
+    expect(parseClientMessage('{"t":"pick","slot":7}')).toBe(null);
+  });
+});

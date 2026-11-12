@@ -121,6 +121,35 @@ export interface GameConfig {
     /** Enemy sounds carry this far (tiles). */
     hearingRange: number;
   };
+  treasures: {
+    /** Collected within this distance (tiles) of its centre. */
+    reach: number;
+    pointsEach: number;
+  };
+  /** Skill strengths; the deck itself (costs, threat) is `SKILLS` in sim/skills.ts. */
+  skills: {
+    navigationMemorySeconds: number;
+    trapSenseReveal: number;
+    trapSenseTell: number;
+    wideEyesMul: number;
+    fleetFootSpeedMul: number;
+    deepLungsDrainMul: number;
+    deepLungsRegenMul: number;
+    /** Steady multiplies how long loss of control lasts. */
+    steadyMul: number;
+    dash: { seconds: number; speedMul: number; cooldownSeconds: number };
+    reveal: { seconds: number; range: number; cooldownSeconds: number };
+    decoy: { seconds: number; cooldownSeconds: number };
+  };
+  /** What threat (the sum of a runner's cards' threat) does. Enemies also prefer the highest-threat runner in sight. */
+  threat: {
+    /** Traps catch you this much further beyond their tile per threat point, up to the max (a brush). */
+    trapReachPerThreat: number;
+    trapReachMax: number;
+    /** Chasers wake this much further off per threat point, up to the max. */
+    wakeRangePerThreat: number;
+    wakeRangeMax: number;
+  };
   health: {
     /** Hearts a runner starts with, and gets back at each new checkpoint. */
     hearts: number;
@@ -197,6 +226,21 @@ export const DEFAULT_CONFIG: GameConfig = {
     turret: { range: 9, turnRate: 2.5, chargeSeconds: 0.8, reloadSeconds: 2.5, boltSpeed: 6, boltRadius: 0.2, slowSeconds: 3 },
     hearingRange: 12,
   },
+  treasures: { reach: 0.7, pointsEach: 1 },
+  skills: {
+    navigationMemorySeconds: 60,
+    trapSenseReveal: 4,
+    trapSenseTell: 5,
+    wideEyesMul: 1.25,
+    fleetFootSpeedMul: 1.08,
+    deepLungsDrainMul: 0.7,
+    deepLungsRegenMul: 1.3,
+    steadyMul: 0.5,
+    dash: { seconds: 0.6, speedMul: 1.8, cooldownSeconds: 8 },
+    reveal: { seconds: 4, range: 8, cooldownSeconds: 15 },
+    decoy: { seconds: 4, cooldownSeconds: 15 },
+  },
+  threat: { trapReachPerThreat: 0.05, trapReachMax: 0.3, wakeRangePerThreat: 0.5, wakeRangeMax: 3 },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {
     slow: { seconds: 3, speedMul: 0.6 },

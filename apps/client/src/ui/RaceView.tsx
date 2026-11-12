@@ -81,6 +81,12 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
             </div>
           )}
           {lowTime && hud && !quiet && <div className="goal low">{Math.ceil(hud.timeLeft)}s left</div>}
+          {hud && phase === 'racing' && !hud.spectating && !quiet && (hud.points > 0 || hud.threat > 0) && (
+            <div className="goal purse">
+              <span className="coin" /> {hud.points} {hud.points === 1 ? 'point' : 'points'}
+              {hud.threat > 0 && <span className="threat">Threat {hud.threat}</span>}
+            </div>
+          )}
         </div>
         <div className="hud-buttons">
           {phase === 'racing' && hud && !hud.spectating && (
@@ -124,6 +130,37 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
 
       {phase === 'racing' && hud && !hud.spectating && (
         <div className="hud-bottom">
+          {hud.offer && (
+            <div className="cards" role="group" aria-label="Skill cards">
+              {hud.offer.map((card, slot) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  className={card.affordable ? 'card' : 'card dim'}
+                  disabled={!card.affordable}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => bridge.emit('pick', slot)}
+                >
+                  <kbd>{slot + 1}</kbd>
+                  <strong>{card.name}</strong>
+                  <span>{card.text}</span>
+                  <small>
+                    {card.cost} {card.cost === 1 ? 'point' : 'points'} · threat +{card.threat}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+          {hud.actives.length > 0 && (
+            <div className="actives">
+              {hud.actives.map((a) => (
+                <span key={a.id} className={a.cooldown > 0 ? 'active-skill cooling' : 'active-skill'}>
+                  <kbd>{a.key}</kbd> {a.name}
+                  {a.cooldown > 0 && <em> {Math.ceil(a.cooldown)}s</em>}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="hearts" aria-label={`${hud.health} of ${hud.healthMax} hearts`}>
             {Array.from({ length: hud.healthMax }, (_, i) => (
               <i key={i} className={i < hud.health ? 'full' : ''}>♥</i>
