@@ -131,6 +131,10 @@ export class RaceScene extends Phaser.Scene {
 
   private camX = 0;
   private camY = 0;
+  /** The full map is open (M): the runner stands still while the others carry on. */
+  private mapOpen = false;
+  /** 0 = race view, 1 = full map; eased between them. */
+  private mapBlend = 0;
   private lookX = 0;
   private lookY = 0;
   private finishedAt = -1;
@@ -179,6 +183,7 @@ export class RaceScene extends Phaser.Scene {
       keyboard.on('keydown-R', () => bridge.emit('restart'));
     }
     keyboard.on('keydown-ENTER', () => driver.ready());
+    keyboard.on('keydown-M', () => this.toggleMap());
     keyboard.on('keydown-BACKSPACE', () => {
       if (this.state.phase === 'preview' && driver.removeLastMarker()) this.data_.audio.click();
     });
@@ -202,6 +207,7 @@ export class RaceScene extends Phaser.Scene {
       bridge.on('skipPreview', () => driver.ready()),
       bridge.on('setPaused', (paused) => driver.setPaused(paused)),
       bridge.on('testEffect', (kind) => driver.testEffect?.(kind)),
+      bridge.on('toggleMap', () => this.toggleMap()),
       bridge.on('testHurt', () => driver.testHurt?.()),
     );
     const onBlur = () => driver.setPaused(true);
@@ -230,6 +236,18 @@ export class RaceScene extends Phaser.Scene {
     return this.state.phase === 'racing' && !this.me().finished;
   }
 
+  /** True while the full map is open during the race. */
+  private peeking(): boolean {
+    return this.mapOpen && this.racingView();
+  }
+
+  /** Opens or closes the full map. Only during the race, and not while paused. */
+  private toggleMap(): void {
+    if (!this.racingView() || this.driver.paused) return;
+    this.mapOpen = !this.mapOpen;
+    this.data_.audio.click();
+  }
+
   /** True once the local runner is done: the whole map is shown again. */
   private overview(): boolean {
     return this.state.phase === 'finished' || this.me().finished;
@@ -242,6 +260,9 @@ export class RaceScene extends Phaser.Scene {
     for (const event of driver.advance(deltaMs, () => this.readIntent())) this.handleEvent(event);
 
     const dt = Math.min(0.1, deltaMs / 1000);
+    if (!this.racingView()) this.mapOpen = false;
+    this.mapBlend += ((this.mapOpen ? 1 : 0) - this.mapBlend) * Math.min(1, dt * 8);
+    if (Math.abs(this.mapBlend - (this.mapOpen ? 1 : 0)) < 0.01) this.mapBlend = this.mapOpen ? 1 : 0;
     if (this.racingView() && !driver.paused && this.state.resumeTime === 0) this.ambientAudio(dt);
     if (this.overview()) {
       if (this.finishedAt < 0) this.finishedAt = this.time.now;
@@ -263,6 +284,8 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private readIntent(): MoveIntent {
+    // Looking at the full map costs time: the runner cannot move meanwhile.
+    if (this.peeking()) return { mx: 0, my: 0, sprint: false };
     if (this.autopilot) {
       const { mx, my, sprint } = this.autopilot(this.me());
       return { mx, my, sprint };
@@ -451,6 +474,8 @@ export class RaceScene extends Phaser.Scene {
     const side = this.driver.resultsLayout === 'side';
     if (this.state.phase === 'finished') return side ? { top: 70, right: 400, bottom: 20 } : { top: 250, right: 0, bottom: 20 };
     if (this.overview()) return { top: 130, right: 0, bottom: 20 };
+    // The full map during the race: keep clear of the banner and the hearts and stamina.
+    if (this.mapOpen) return { top: 130, right: 0, bottom: 80 };
     return { top: 185, right: 0, bottom: 20 };
   }
 
@@ -508,9 +533,11 @@ export class RaceScene extends Phaser.Scene {
       this.camX = mix(mapCx, targetX, t);
       this.camY = mix(mapCy, targetY, t);
     } else if (this.racingView()) {
-      cam.setZoom(this.raceZoom());
-      this.camX = targetX;
-      this.camY = targetY;
+      // With the full map open, pull back to show it all.
+      const t = ease(this.mapBlend);
+      cam.setZoom(zoomMix(this.raceZoom(), this.overviewZoom(), t));
+      this.camX = mix(targetX, mapCx, t);
+      this.camY = mix(targetY, mapCy, t);
     } else {
       // Finished: pull back out to show the whole map and the route taken.
       const t = ease(Math.min(1, (this.time.now - this.finishedAt) / 1600));
@@ -548,7 +575,7 @@ export class RaceScene extends Phaser.Scene {
       for (let tx = x0; tx <= x1; tx++) {
         const i = ty * map.width + tx;
         let target = 0;
-        if (racing && !visible[i]) {
+        if (racing && !visible[i] && !this.mapOpen) {
           const age = state.raceTime - seenAt[i]!;
           if (memory > 0 && age < memory) {
             // Remembered tiles stay dim, then fade to black over the last third of the memory time.
@@ -569,7 +596,7 @@ export class RaceScene extends Phaser.Scene {
 
   /** Whether something at this position may be drawn: during a race, only inside the current view. */
   private isVisibleTile(x: number, y: number): boolean {
-    if (!this.racingView()) return true;
+    if (!this.racingView() || this.peeking()) return true;
     const { map } = this.data_;
     const tx = Math.floor(x);
     const ty = Math.floor(y);
@@ -752,7 +779,7 @@ export class RaceScene extends Phaser.Scene {
     // Ghost of the best run on this map.
     {
       const sample = this.driver.ghost();
-      if (sample && this.isVisibleTile(sample.x, sample.y)) {
+      if (sample && !this.peeking() && this.isVisibleTile(sample.x, sample.y)) {
         const gx = sample.x * PX;
         const gy = sample.y * PX;
         g.fillStyle(COLOR.ghost, 0.22).fillCircle(gx, gy, PX * 0.3);
@@ -765,10 +792,11 @@ export class RaceScene extends Phaser.Scene {
     const x = px * PX;
     const y = py * PX;
     const nose = (angle: number, dist: number) => ({ x: x + Math.cos(me.facing + angle) * dist, y: y + Math.sin(me.facing + angle) * dist });
-    const scale = state.phase === 'preview' ? 2.4 : 1;
+    const scale = state.phase === 'preview' ? 2.4 : 1 + 1.4 * this.mapBlend;
     // Flickers during the safe time after a respawn.
     const alpha = me.safeTime > 0 && this.flickerOff() ? 0.2 : 1;
-    if (scale > 1) g.lineStyle(3, mine, 0.9).strokeCircle(x, y, r * 4 + Math.sin(this.time.now / 180) * 4);
+    // A pulsing ring makes the runner easy to find on the whole map.
+    if (state.phase === 'preview' || this.mapBlend > 0.5) g.lineStyle(3, mine, 0.9).strokeCircle(x, y, r * 4 + Math.sin(this.time.now / 180) * 4);
     g.fillStyle(mine, alpha).fillCircle(x, y, r * scale);
     g.fillStyle(0xffffff, alpha).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
     g.lineStyle(2, 0x1a1205, alpha).strokeCircle(x, y, r * scale);
@@ -914,6 +942,7 @@ export class RaceScene extends Phaser.Scene {
       paused: this.driver.paused,
       terrain: TERRAIN[me.terrain]!.name,
       spectating: state.phase === 'racing' && me.finished,
+      mapOpen: this.peeking(),
       health: me.health,
       healthMax: state.config.health.hearts,
       effects: me.effects.map((e) => ({ kind: e.kind, left: e.time, total: e.total })),

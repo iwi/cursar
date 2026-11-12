@@ -134,6 +134,8 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .goal.open { color: var(--good); font-weight: 600; }
 .hud-buttons { display: flex; gap: 8px; justify-content: flex-end; pointer-events: auto; }
 .hud-buttons button { background: rgba(21, 25, 34, 0.85); font-size: 14px; padding: 6px 10px; }
+.hud-buttons button.active { border-color: var(--accent); color: var(--accent); }
+.map-banner { pointer-events: none; }
 .banner {
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
   display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: center;

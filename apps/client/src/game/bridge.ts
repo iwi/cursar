@@ -18,6 +18,8 @@ export interface HudState {
   checkpointsTotal: number;
   paused: boolean;
   terrain: string;
+  /** The full map is open: the runner is standing still. */
+  mapOpen: boolean;
   /** The local runner has finished and is watching the others. */
   spectating: boolean;
   health: number;
@@ -41,6 +43,8 @@ interface BridgeEvents {
   testEffect: EffectKind;
   /** Tuning panel (solo only): take a heart from the runner. */
   testHurt: undefined;
+  /** Open or close the full map during the race. */
+  toggleMap: undefined;
 }
 
 type Handler<T> = (payload: T) => void;

@@ -83,6 +83,16 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
           {lowTime && hud && !quiet && <div className="goal low">{Math.ceil(hud.timeLeft)}s left</div>}
         </div>
         <div className="hud-buttons">
+          {phase === 'racing' && hud && !hud.spectating && (
+            <button
+              type="button"
+              className={hud.mapOpen ? 'active' : ''}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => bridge.emit('toggleMap')}
+            >
+              {hud.mapOpen ? 'Close map (M)' : 'Map (M)'}
+            </button>
+          )}
           <button type="button" onClick={() => onChange({ muted: !settings.muted })}>{settings.muted ? 'Sound off' : 'Sound on'}</button>
           {buttons}
         </div>
@@ -133,6 +143,13 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
             <div style={{ width: `${Math.round(hud.stamina * 100)}%` }} />
           </div>
           <span>{hud.exhausted ? 'Out of breath' : hud.terrain === 'Floor' ? 'Stamina' : `On ${hud.terrain.toLowerCase()}`}</span>
+        </div>
+      )}
+
+      {phase === 'racing' && hud?.mapOpen && (
+        <div className="banner map-banner">
+          <strong>Full map — you are standing still</strong>
+          <span>The clock and the others keep going. Press M to close it.</span>
         </div>
       )}
 

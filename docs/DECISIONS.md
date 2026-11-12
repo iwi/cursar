@@ -13,7 +13,7 @@ Status key: **Built** = in the current project. **Agreed** = decided, not built 
 | First release | Single player first, multiplayer straight after. | Built (single player) |
 | Race length | Target 120–300 seconds. Races are cut off at 420 s (7 minutes) so a slow run on a large map can still finish. | Built, second tuning pass (see section 1a) |
 | Map freshness | Seeded random maps from the first release (moved up from P3). Same seed gives the same map. | Built |
-| Map key (M) | Removed. There is no in-race map. | Built |
+| Full map during the race (M) | Brought back on 12 November, with a cost: press `M` (or the Map button) to see the whole map as in the preview, with your position, the checkpoints you have touched, your waypoints and the obstacles moving. While it is open your runner **cannot move**; the clock, rivals and the ghost keep going. Rivals and the ghost are not shown on it (the server never sends where rivals are outside your view). It cannot be opened while paused. In network play this is enforced only by the page: the layout is public anyway (it is shown in the preview), so a modified page gains nothing it could not memorise. Earlier decision: no in-race map at all. | Built |
 | Memory of seen tiles | Tiles you have seen stay dimly visible for 25 s, then fade. Only terrain is remembered, never moving things. A Navigation skill will later lengthen this or make it permanent. | Built (skill: agreed) |
 | Preview | Shows walls, terrain, landmarks, and later traps and enemies. Length scales with map size (15 s small, 17 s medium, 19 s large) so there is never time to memorise everything. | Built |
 | Preview waypoints | Up to 3, dropped by clicking during the preview. In the race an arrow points to the next one. | Built |
