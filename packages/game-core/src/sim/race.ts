@@ -31,6 +31,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
     raceTicks: 0,
     raceTime: 0,
     deadline: config.race.timeLimitSeconds,
+    resumeTime: 0,
     players: players.map((setup, i): PlayerState => {
       const start = map.startPositions[setup.slot ?? i];
       if (!start) throw new Error(`No start position for slot ${setup.slot ?? i}.`);
@@ -79,6 +80,15 @@ export function removeLastMarker(state: RaceState, playerId: string): boolean {
   return true;
 }
 
+/**
+ * Call when a pause ends. During the race this starts a short count (3-2-1)
+ * before anyone can move again; in the preview or start countdown play simply
+ * continues, since nobody is moving yet.
+ */
+export function resumeRace(state: RaceState): void {
+  if (state.phase === 'racing') state.resumeTime = state.config.race.resumeCountdownSeconds;
+}
+
 /** Ends the preview early (single-player convenience; a lobby would require everyone ready). */
 export function skipPreview(state: RaceState): void {
   if (state.phase === 'preview') state.phaseTime = 0;
@@ -121,6 +131,21 @@ export function step(state: RaceState, inputs: Record<string, PlayerInput>): Gam
   }
 
   if (state.phase !== 'racing') return events;
+
+  if (state.resumeTime > 0) {
+    // The count after a pause: inputs are ignored and the race clock stands still.
+    const before = Math.ceil(state.resumeTime - 1e-9);
+    if (state.resumeTime === state.config.race.resumeCountdownSeconds) events.push({ type: 'countdown', n: before });
+    state.resumeTime -= dt;
+    const after = Math.ceil(state.resumeTime - 1e-9);
+    if (state.resumeTime <= 1e-9) {
+      state.resumeTime = 0;
+      events.push({ type: 'resumed' });
+    } else if (after !== before) {
+      events.push({ type: 'countdown', n: after });
+    }
+    return events;
+  }
 
   state.raceTicks++;
   state.raceTime = state.raceTicks / config.tickRate;

@@ -85,6 +85,7 @@ export class NetDriver implements RaceDriver {
     state.phase = snapshot.phase;
     state.phaseTime = snapshot.phaseTime;
     state.deadline = snapshot.deadline;
+    state.resumeTime = snapshot.resumeTime;
     this.readyCount = snapshot.readyCount;
     this.paused = snapshot.paused;
     // After a page reload the server remembers our last input number: carry on from it.
@@ -100,7 +101,7 @@ export class NetDriver implements RaceDriver {
     this.pending = this.pending.filter((input) => input.seq > snapshot.you.lastInputSeq);
     state.raceTicks = snapshot.raceTicks;
     const discard: GameEvent[] = [];
-    if (snapshot.phase === 'racing') {
+    if (snapshot.phase === 'racing' && snapshot.resumeTime === 0) {
       for (const input of this.pending) {
         if (me.finished) break;
         state.raceTicks++;
@@ -153,6 +154,11 @@ export class NetDriver implements RaceDriver {
       if (state.phase === 'preview' || state.phase === 'countdown') {
         // Count down smoothly between snapshots; the server decides when the phase ends.
         state.phaseTime = Math.max(0.01, state.phaseTime - dt);
+      } else if (state.phase === 'racing' && state.resumeTime > 0) {
+        // The count after a pause: stand still and send nothing; the server says when it ends.
+        state.resumeTime = Math.max(0.01, state.resumeTime - dt);
+        this.prevX = me.x;
+        this.prevY = me.y;
       } else if (state.phase === 'racing') {
         state.raceTicks++;
         state.raceTime = state.raceTicks / state.config.tickRate;

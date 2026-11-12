@@ -8,6 +8,7 @@ import {
   createRace,
   placeMarker,
   removeLastMarker,
+  resumeRace,
   sampleGhost,
   skipPreview,
   step,
@@ -191,7 +192,9 @@ export class LocalDriver implements RaceDriver {
 
   setPaused(paused: boolean): void {
     // Pausing only stops a race in progress.
-    this.paused = this.state.phase === 'finished' ? false : paused;
+    const next = this.state.phase === 'finished' ? false : paused;
+    if (this.paused && !next) resumeRace(this.state);
+    this.paused = next;
   }
 
   destroy(): void {}

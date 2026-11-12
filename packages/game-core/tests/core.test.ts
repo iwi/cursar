@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CONFIG, type GameEvent, GhostRecorder, MAP_SIZES, type MapSize, NO_INPUT, type PlayerInput, Rng, Tile,
   cloneConfig, computeVisibility, createRace, flipMap, generateMap, isSolid, placeMarker, previewSeconds,
-  planRoute, sampleGhost, skipPreview, step, validateMap, visionRange,
+  planRoute, resumeRace, sampleGhost, skipPreview, step, validateMap, visionRange,
 } from '../src';
 import { makeBot, mapFromText } from './helpers';
 
@@ -62,6 +62,12 @@ describe('map generation', () => {
           expect(isSolid(map, x, 0) && isSolid(map, x, map.height - 1)).toBe(true);
         }
       }
+    }
+  });
+
+  it('never has more plazas than the client has plaza colours (10)', () => {
+    for (const size of Object.keys(MAP_SIZES) as MapSize[]) {
+      for (let i = 0; i < 10; i++) expect(generateMap({ size, seed: `plaza${i}` }).landmarks.length).toBeLessThanOrEqual(10);
     }
   });
 
@@ -301,6 +307,28 @@ describe('race lifecycle', () => {
     while (state.phase === 'racing') events = step(state, { p1: bot(state) });
     expect(p.finished).toBe(true);
     expect(events.some((e) => e.type === 'finish')).toBe(true);
+  });
+
+  it('counts 3-2-1 after a pause, holding everyone and the clock still, then carries on', () => {
+    const state = startRacing();
+    run(state, input(1, 0), 0.5);
+    const at = { x: state.players[0]!.x, ticks: state.raceTicks };
+    resumeRace(state);
+    expect(state.resumeTime).toBe(DEFAULT_CONFIG.race.resumeCountdownSeconds);
+    const events = run(state, input(1, 0), DEFAULT_CONFIG.race.resumeCountdownSeconds);
+    expect(events.filter((e) => e.type === 'countdown')).toEqual([3, 2, 1].map((n) => ({ type: 'countdown', n })));
+    expect(events.at(-1)).toEqual({ type: 'resumed' });
+    expect(events.some((e) => e.type === 'footstep')).toBe(false);
+    expect(state.raceTicks).toBe(at.ticks);
+    expect(state.resumeTime).toBe(0);
+    run(state, input(1, 0), 0.5);
+    expect(state.players[0]!.x).toBeGreaterThan(at.x);
+    expect(state.raceTicks).toBe(at.ticks + 30);
+
+    // Before the race starts there is nothing to hold, so no count.
+    const early = createRace(OPEN, RUNNER);
+    resumeRace(early);
+    expect(early.resumeTime).toBe(0);
   });
 
   it('ends the race at the time limit', () => {

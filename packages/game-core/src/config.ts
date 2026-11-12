@@ -39,6 +39,8 @@ export interface GameConfig {
     previewSecondsPerTile: number;
     previewMaxSeconds: number;
     countdownSeconds: number;
+    /** After a pause, a short count before play continues, so nobody is caught mid-sprint. */
+    resumeCountdownSeconds: number;
     timeLimitSeconds: number;
     /** Once the first player finishes, the rest have this long. */
     finishGraceSeconds: number;
@@ -75,6 +77,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     previewSecondsPerTile: 1 / 260,
     previewMaxSeconds: 30,
     countdownSeconds: 3,
+    resumeCountdownSeconds: 3,
     timeLimitSeconds: 420,
     finishGraceSeconds: 30,
   },

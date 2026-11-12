@@ -39,14 +39,53 @@ const COLOR = {
   checkpointDone: 0x8a93a6,
 };
 
-const LANDMARK_COLOR: Record<Landmark['kind'], number> = {
-  fountain: 0x4aa3ff,
-  statue: 0xd8d8e0,
-  tree: 0x4fbf6a,
-  crystal: 0xc77dff,
-  brazier: 0xff6b3d,
-  obelisk: 0xf2d24b,
-};
+/**
+ * One colour per plaza. The shape says what kind of landmark it is; the colour
+ * tells apart two of the same kind ("the red fountain"). Maps have at most 10
+ * plazas, so no two on a map share a colour. None is close to the checkpoint pink.
+ */
+const LANDMARK_TINTS = [
+  0x4aa3ff, // blue
+  0xf2d24b, // yellow
+  0x4fbf6a, // green
+  0xff6b3d, // orange
+  0xc77dff, // purple
+  0xe8e8f0, // white
+  0x3fe0d0, // teal
+  0xe5484d, // red
+  0xa8e05f, // lime
+  0xc08a4a, // bronze
+];
+
+/** Rough perceived difference between two colours ("redmean" distance). */
+function colourDistance(a: number, b: number): number {
+  const [r1, g1, b1] = [a >> 16, (a >> 8) & 0xff, a & 0xff];
+  const [r2, g2, b2] = [b >> 16, (b >> 8) & 0xff, b & 0xff];
+  const rm = (r1 + r2) / 2;
+  return Math.sqrt((2 + rm / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rm) / 256) * (b1 - b2) ** 2);
+}
+
+/**
+ * Colours for a map's plazas, in the order the map lists them. Each plaza takes
+ * the next unused colour, except a second landmark of a kind already seen: it
+ * takes the unused colour most unlike the first one's, so the two never look alike.
+ */
+function plazaTints(landmarks: readonly Landmark[]): number[] {
+  const free = [...LANDMARK_TINTS];
+  const firstOfKind = new Map<Landmark['kind'], number>();
+  return landmarks.map((mark, i) => {
+    const first = firstOfKind.get(mark.kind);
+    let pick = 0;
+    if (first !== undefined) {
+      free.forEach((c, j) => {
+        if (colourDistance(first, c) > colourDistance(first, free[pick]!)) pick = j;
+      });
+    }
+    const color = free.splice(pick, 1)[0] ?? LANDMARK_TINTS[i % LANDMARK_TINTS.length]!;
+    if (first === undefined) firstOfKind.set(mark.kind, color);
+    return color;
+  });
+}
 
 export class RaceScene extends Phaser.Scene {
   private data_!: RaceSceneData;
@@ -174,7 +213,7 @@ export class RaceScene extends Phaser.Scene {
     for (const event of driver.advance(deltaMs, () => this.readIntent())) this.handleEvent(event);
 
     const dt = Math.min(0.1, deltaMs / 1000);
-    if (this.racingView() && !driver.paused) this.ambientAudio(dt);
+    if (this.racingView() && !driver.paused && this.state.resumeTime === 0) this.ambientAudio(dt);
     if (this.overview()) {
       if (this.finishedAt < 0) this.finishedAt = this.time.now;
       if (!this.routesDrawn && this.state.phase === 'finished') {
@@ -213,6 +252,9 @@ export class RaceScene extends Phaser.Scene {
     switch (event.type) {
       case 'countdown':
         audio.countdown();
+        break;
+      case 'resumed':
+        audio.go();
         break;
       case 'phase':
         if (event.phase === 'racing') audio.go();
@@ -484,8 +526,9 @@ export class RaceScene extends Phaser.Scene {
     }
     g.lineStyle(3, COLOR.finishArrow, 1).strokeRect(f.x * PX, f.y * PX, f.w * PX, f.h * PX);
 
-    // Landmarks: each kind has its own colour and shape so it can be remembered.
-    for (const mark of map.landmarks) this.drawLandmark(g, mark);
+    // Landmarks: the shape gives the kind, the colour picks out the plaza.
+    const tints = plazaTints(map.landmarks);
+    map.landmarks.forEach((mark, i) => this.drawLandmark(g, mark, tints[i]!));
   }
 
   /** After the race: the routes taken, drawn over the revealed map. */
@@ -501,10 +544,9 @@ export class RaceScene extends Phaser.Scene {
     }
   }
 
-  private drawLandmark(g: Phaser.GameObjects.Graphics, mark: Landmark): void {
+  private drawLandmark(g: Phaser.GameObjects.Graphics, mark: Landmark, color: number): void {
     const x = mark.x * PX;
     const y = mark.y * PX;
-    const color = LANDMARK_COLOR[mark.kind];
     const r = PX * 0.8;
     g.fillStyle(color, 0.16).fillCircle(x, y, PX * 2.1);
     g.fillStyle(color, 1).lineStyle(3, color, 1);
@@ -679,6 +721,7 @@ export class RaceScene extends Phaser.Scene {
     this.data_.bridge.emit('hud', {
       phase: state.phase,
       phaseTime: state.phaseTime,
+      resumeTime: state.resumeTime,
       raceTime: me.finishTime ?? state.raceTime,
       timeLeft: state.deadline - state.raceTime,
       stamina: me.stamina / state.config.sprint.staminaMax,

@@ -4,6 +4,8 @@ import type { RacePhase } from '@cursar/game-core';
 export interface HudState {
   phase: RacePhase;
   phaseTime: number;
+  /** Seconds left in the count after a pause (0 when play is running). */
+  resumeTime: number;
   raceTime: number;
   /** Seconds left before the race is cut off. */
   timeLeft: number;

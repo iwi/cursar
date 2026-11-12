@@ -27,6 +27,7 @@ import {
   pointsForPlace,
   removeLastMarker,
   skipPreview,
+  resumeRace,
   step,
 } from '@cursar/game-core';
 
@@ -203,6 +204,7 @@ export class Room {
       case 'pause':
         if (!isHost || !this.race || this.paused === message.on) return;
         this.paused = message.on;
+        if (!message.on) resumeRace(this.race.state);
         this.sendSnapshots(this.race);
         return;
       case 'restart':
@@ -385,7 +387,8 @@ export class Room {
       inputs[m.id] = { seq: steer.seq, mx: steer.mx * speed, my: steer.my * speed, sprint: false };
     });
     for (const m of race.racers) {
-      if (!m.send) continue;
+      // During the count after a pause nobody moves: leave queued inputs for when play continues.
+      if (!m.send || state.resumeTime > 0) continue;
       const next = m.queue.shift();
       if (next) {
         m.lastInput = next;
@@ -399,7 +402,7 @@ export class Room {
     const events = step(state, inputs);
     let urgent = false;
     for (const event of events) {
-      if (event.type === 'phase' || event.type === 'countdown' || event.type === 'finish') {
+      if (event.type === 'phase' || event.type === 'countdown' || event.type === 'resumed' || event.type === 'finish') {
         for (const m of race.racers) if (m.send) m.events.push(event);
         urgent = true;
       } else if (event.type === 'footstep') {
@@ -467,6 +470,7 @@ export class Room {
         phaseTime: state.phaseTime,
         raceTicks: state.raceTicks,
         deadline: state.deadline,
+        resumeTime: state.resumeTime,
         you: selfState(p),
         rivals,
         prints,

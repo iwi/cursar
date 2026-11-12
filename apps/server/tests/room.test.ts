@@ -345,7 +345,7 @@ describe('race', () => {
     expect(room.info().players).toEqual([]);
   });
 
-  it('lets only the host pause, and freezes the race for everyone while paused', () => {
+  it('lets only the host pause, freezes the race for everyone, and counts 3-2-1 before play continues', () => {
     const { clients, room } = startRacing();
     const state = room.raceState!;
     ticks(room, 30);
@@ -365,7 +365,17 @@ describe('race', () => {
     expect(state.players[1]).toMatchObject({ x: before.x, y: before.y });
 
     clients[0]!.send({ t: 'pause', on: false });
-    expect(clients[1]!.last('snap').paused).toBe(false);
+    expect(clients[1]!.last('snap')).toMatchObject({ paused: false, resumeTime: 3 });
+    // A 3-2-1 before play continues: the clock stands still and nobody moves.
+    const seen = clients[1]!.inbox.length;
+    ticks(room, 3 * 60 - 1);
+    expect(state.raceTicks).toBe(60);
+    expect(state.players[1]).toMatchObject({ x: before.x, y: before.y });
+    room.tick();
+    const events = clients[1]!.inbox.slice(seen).flatMap((m) => (m.t === 'snap' ? m.events : []));
+    expect(events.filter((e) => e.type === 'countdown').map((e) => (e as { n: number }).n)).toEqual([3, 2, 1]);
+    expect(events.at(-1)).toEqual({ type: 'resumed' });
+    expect(clients[1]!.last('snap').resumeTime).toBe(0);
     ticks(room, 30);
     expect(state.raceTicks).toBe(90);
     expect(state.players[1]!.x !== before.x || state.players[1]!.y !== before.y).toBe(true);

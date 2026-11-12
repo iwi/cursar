@@ -63,12 +63,16 @@ export interface RaceState {
   raceTime: number;
   /** Race time at which the race is cut off (time limit, or grace after the first finisher). */
   deadline: number;
+  /** Seconds left in the count after a pause. Nobody moves and the clock stands still while it runs. */
+  resumeTime: number;
   players: PlayerState[];
 }
 
 export type GameEvent =
   | { type: 'phase'; phase: RacePhase }
   | { type: 'countdown'; n: number }
+  /** The count after a pause has ended and play continues. */
+  | { type: 'resumed' }
   | { type: 'footstep'; playerId: string; terrain: number; sprinting: boolean }
   | { type: 'bump'; playerId: string; speed: number }
   | { type: 'exhausted'; playerId: string }

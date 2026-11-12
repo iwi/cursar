@@ -107,6 +107,9 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
       )}
 
       {phase === 'countdown' && hud && <div className="count" key={Math.ceil(hud.phaseTime)}>{Math.ceil(hud.phaseTime)}</div>}
+      {phase === 'racing' && hud && hud.resumeTime > 0 && !hud.paused && (
+        <div className="count" key={`resume-${Math.ceil(hud.resumeTime)}`}>{Math.ceil(hud.resumeTime)}</div>
+      )}
 
       {phase === 'racing' && hud && !hud.spectating && (
         <div className="hud-bottom">

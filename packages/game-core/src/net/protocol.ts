@@ -3,7 +3,7 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -131,6 +131,8 @@ export type ServerMessage =
       phaseTime: number;
       raceTicks: number;
       deadline: number;
+      /** Seconds left in the count after a pause (0 when play is running). */
+      resumeTime: number;
       you: SelfState;
       /** Only the rivals you are allowed to see right now. */
       rivals: RivalView[];

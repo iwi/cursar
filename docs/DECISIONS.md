@@ -1,6 +1,6 @@
 # Cursar – Design Decisions (addendum to the v0.1 documents)
 
-Date: 10 November 2026, updated 11 November 2026 after the play tests and the multiplayer build
+Date: 10 November 2026, updated 11 November 2026 after the play tests and the multiplayer build, and 12 November 2026 with answers to the open questions
 
 This records what was agreed in the design review and where it changes the Game Design Document (GDD), the Technical Architecture and the Roadmap. Where this file and the v0.1 documents disagree, this file wins.
 
@@ -21,12 +21,13 @@ Status key: **Built** = in the current project. **Agreed** = decided, not built 
 | Vision | Egg-shaped: 8 tiles ahead, 4 to the side, 2 behind. Walls block it. | Built |
 | Character size | Collision radius 0.3 tile, so a one-tile gap is passable. Corridors in generated maps are 2 tiles wide. | Built |
 | Sprint | Limited by stamina. Running dry locks sprint until 25% is recovered. | Built |
-| Pause | Solo: anyone, any time. Multiplayer: the host only, and it freezes the race for everyone (changed 11 November; it was "no pause in multiplayer"). From the pause panel the host can resume, restart the race on the same map, or cancel to the lobby. | Built |
-| Computer players | The host can add them in the lobby. They are run by the server, take the best route, and differ only in speed: Easy 45%, Normal 60%, Hard 80% of top speed, never sprinting. They score series points like anyone else. | Built |
+| Pause | Solo: anyone, any time. Multiplayer: the host only, and it freezes the race for everyone (changed 11 November; it was "no pause in multiplayer"). From the pause panel the host can resume, restart the race on the same map, or cancel to the lobby. Resuming a race in progress counts 3-2-1 (with beeps and the start tone) before anyone can move, so nobody is caught mid-sprint; the race clock stands still during the count (added 12 November, solo and multiplayer). | Built |
+| Computer players | The host can add them in the lobby. They are run by the server, take the best route, and differ only in speed: Easy 45%, Normal 60%, Hard 80% of top speed, never sprinting. They score series points like anyone else. Later: a little randomness so a bot now and then loses track of the right turn for a short while, to feel more human. | Built (randomness: agreed, later) |
 | Checkpoints | Every checkpoint must be touched, in any order, before the finish counts (3, 4 or 5 by map size). Later they also become respawn points and the places where skills are picked. | Built (respawn and skills: agreed) |
 | Footprints | Runners leave fading footprints. You see a rival's only inside your own view. | Built |
 | Objective arrow | Optional arrow pointing at the nearest untouched checkpoint, then the finish (direction only), off by default. | Built |
 | Finish timer | Once the first runner finishes, the rest have 30 s. Finished runners watch the rest on the full map. | Built |
+| Landmarks | The features in the open plazas (fountain, statue, tree, crystal, brazier, obelisk) give the preview things to remember. Maps have 8–10 plazas and only six kinds, so some kinds repeat. Decided 12 November: the shape shows the kind and each plaza has its own colour, so no two plazas on a map share one; a repeated kind gets the colour most unlike its twin ("the red fountain", "the blue fountain"). Drawing only: maps and saved ghosts are unchanged. | Built |
 | Player collision | Runners do not block each other. | Built |
 | Personal difficulty | A personal threat level: enemies prioritise high-threat players and traps trigger more easily for them. Replaces "more enemies for one player". | Agreed |
 | Loss-of-control effects | Reverse controls, confusion and similar last about one second. | Agreed |
@@ -121,14 +122,14 @@ Agreed for later phases:
 | Storage | Browser storage for settings and best runs. SQLite waits until profiles and statistics. | Built |
 | Events | The simulation reports what happened (footstep, bump, finish and so on) as events. Audio and effects listen to them. | Built |
 | Effect system | To be built first in Phase 3, before terrain hazards and traps. | Agreed |
-| Internet play | A single hosted server with room codes and no accounts, next. Needs HTTPS and several rooms; the game code is already independent of where it runs. Accounts and matchmaking stay late. | Agreed |
+| Internet play | A single hosted server with room codes and no accounts, next. Needs HTTPS and several rooms; the game code is already independent of where it runs. The host will be able to remove a human player from the room in this version. Accounts and matchmaking stay late. | Agreed |
 | Phaser version | Phaser 3.90, the final and most widely documented release of version 3. Version 4 exists; because rendering is kept separate from the game rules, moving later affects only `apps/client/src/game`. | Built |
 
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
-2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. *Now: play it together and report how it feels.*
-3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts.
+2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
+3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player.
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio.
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level.
 6. **Phase 5: map editor.** Using the same map format the generator already produces.
@@ -137,9 +138,6 @@ Agreed for later phases:
 
 ## 6. Open questions
 
-- Multiplayer has been tested with two browsers on one machine, not yet across real computers on a network. Things to watch for in the first session: whether your own movement still feels immediate, whether rivals move smoothly, and whether anyone's firewall blocks the address.
-- Resuming from a pause is immediate. A short 3-2-1 before play continues would be fairer if pauses happen mid-sprint; say if you want it.
-- Computer players never get lost, which makes them steady rather than human. Their speeds are first guesses set against your times (a flawless run at full speed is about 80 s on a small map).
-- The host cannot yet remove a human player.
-- Larger maps repeat landmark shapes (there are six kinds). More kinds, or a colour per plaza, would make them easier to tell apart.
-- Memory time (25 s) and vision ranges are first guesses. The Tuning panel (solo mode) changes them live; multiplayer uses the defaults.
+- Computer players' speeds are first guesses set against your times (a flawless run at full speed is about 80 s on a small map).
+
+Settled on 12 November: multiplayer works across real computers on a network; memory time (25 s) and vision ranges stay as they are (the Tuning panel in solo mode still changes them live).
