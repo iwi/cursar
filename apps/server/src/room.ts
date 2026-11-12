@@ -450,8 +450,8 @@ export class Room {
         urgent = true;
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
-      } else if (event.type === 'effect' || event.type === 'effectResisted') {
-        // Effects come from the server (hazards, traps), so the runner's page cannot predict them.
+      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn') {
+        // Effects and damage come from the server (hazards, traps), so the runner's page cannot predict them.
         const index = state.players.findIndex((p) => p.id === event.playerId);
         const member = race.racers[index];
         if (member?.send) member.events.push(event);
@@ -506,6 +506,7 @@ export class Room {
         if (inView(other.x, other.y)) {
           const rival: RivalView = { id: other.id, x: round(other.x, 100), y: round(other.y, 100), facing: round(other.facing, 100) };
           if (other.effects.length > 0) rival.fx = other.effects.map((e) => e.kind);
+          if (other.safeTime > 0) rival.safe = true;
           rivals.push(rival);
         }
         if (seeAll) continue;

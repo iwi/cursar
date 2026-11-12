@@ -264,6 +264,19 @@ export class AudioEngine {
     }
   }
 
+  /** Lost a heart: lower and harsher as health runs low. */
+  hurt(health: number): void {
+    this.noise({ dur: 0.18, freq: 220, filter: 'lowpass', vol: 0.4 });
+    this.tone({ freq: health <= 1 ? 180 : 260, to: health <= 1 ? 90 : 160, dur: 0.3, vol: 0.25, type: 'sawtooth' });
+  }
+
+  /** Out of hearts and back at the last checkpoint. */
+  respawn(): void {
+    this.tone({ freq: 1200, to: 300, dur: 0.35, vol: 0.18, type: 'sine' });
+    this.tone({ freq: 523, dur: 0.2, vol: 0.18, type: 'triangle', delay: 0.38 });
+    this.tone({ freq: 784, dur: 0.3, vol: 0.18, type: 'triangle', delay: 0.5 });
+  }
+
   /** A loss-of-control effect has ended: your controls are your own again. */
   controlBack(): void {
     this.tone({ freq: 660, dur: 0.1, vol: 0.14, type: 'triangle' });

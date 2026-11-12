@@ -19,6 +19,7 @@ function losingControl(p: PlayerState): boolean {
  *
  * - The same kind again does not stack: the longer of the two times is kept.
  * - Different kinds run side by side (slowed and blinded at once is fine).
+ * - Nothing harmful takes hold during the safe time after a respawn.
  * - Loss of control (stun, reversed, confused) comes one at a time: none can
  *   start while another is running, nor during the guard after one ends, so a
  *   row of traps cannot keep a runner helpless.
@@ -33,6 +34,8 @@ export function applyEffect(
   seconds: number = config.effects[kind].seconds,
 ): boolean {
   if (p.finished || !(seconds > 0)) return false;
+  // Safe after a respawn: nothing harmful takes hold.
+  if (p.safeTime > 0 && kind !== 'haste') return false;
   if (LOSS_OF_CONTROL.has(kind) && (p.controlGuard > 0 || losingControl(p))) {
     events.push({ type: 'effectResisted', playerId: p.id, kind });
     return false;

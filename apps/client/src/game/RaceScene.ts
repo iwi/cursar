@@ -189,6 +189,7 @@ export class RaceScene extends Phaser.Scene {
       bridge.on('skipPreview', () => driver.ready()),
       bridge.on('setPaused', (paused) => driver.setPaused(paused)),
       bridge.on('testEffect', (kind) => driver.testEffect?.(kind)),
+      bridge.on('testHurt', () => driver.testHurt?.()),
     );
     const onBlur = () => driver.setPaused(true);
     window.addEventListener('blur', onBlur);
@@ -309,6 +310,15 @@ export class RaceScene extends Phaser.Scene {
         if (event.playerId === me.id && LOSS_OF_CONTROL.has(event.kind) && !me.effects.some((e) => LOSS_OF_CONTROL.has(e.kind))) {
           audio.controlBack();
         }
+        break;
+      case 'hurt':
+        if (event.playerId === me.id) {
+          audio.hurt(event.health);
+          if (event.health > 0) this.cameras.main.shake(120, 0.006);
+        }
+        break;
+      case 'respawn':
+        if (event.playerId === me.id) audio.respawn();
         break;
       case 'effectResisted':
         if (event.playerId === me.id) audio.resisted();
@@ -657,6 +667,7 @@ export class RaceScene extends Phaser.Scene {
     for (const rival of this.driver.rivals()) {
       const rx = rival.x * PX;
       const ry = rival.y * PX;
+      if (rival.safe && this.flickerOff()) continue;
       g.fillStyle(rival.color, 1).fillCircle(rx, ry, r);
       g.fillStyle(0xffffff, 1).fillPoints(
         [0, 0.9, -0.9].map((a, i) => {
@@ -698,10 +709,12 @@ export class RaceScene extends Phaser.Scene {
     const y = py * PX;
     const nose = (angle: number, dist: number) => ({ x: x + Math.cos(me.facing + angle) * dist, y: y + Math.sin(me.facing + angle) * dist });
     const scale = state.phase === 'preview' ? 2.4 : 1;
+    // Flickers during the safe time after a respawn.
+    const alpha = me.safeTime > 0 && this.flickerOff() ? 0.2 : 1;
     if (scale > 1) g.lineStyle(3, mine, 0.9).strokeCircle(x, y, r * 4 + Math.sin(this.time.now / 180) * 4);
-    g.fillStyle(mine, 1).fillCircle(x, y, r * scale);
-    g.fillStyle(0xffffff, 1).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
-    g.lineStyle(2, 0x1a1205, 1).strokeCircle(x, y, r * scale);
+    g.fillStyle(mine, alpha).fillCircle(x, y, r * scale);
+    g.fillStyle(0xffffff, alpha).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
+    g.lineStyle(2, 0x1a1205, alpha).strokeCircle(x, y, r * scale);
 
     // Stamina ring round the runner whenever it is not full.
     const share = me.stamina / state.config.sprint.staminaMax;
@@ -734,6 +747,11 @@ export class RaceScene extends Phaser.Scene {
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
       }
     }
+  }
+
+  /** On and off about eight times a second, for runners in their safe time. */
+  private flickerOff(): boolean {
+    return Math.floor(this.time.now / 60) % 2 === 0;
   }
 
   /** A coloured ring per effect round a runner; for your own, the ring shrinks as the effect runs out. */
@@ -782,6 +800,8 @@ export class RaceScene extends Phaser.Scene {
       paused: this.driver.paused,
       terrain: TERRAIN[me.terrain]!.name,
       spectating: state.phase === 'racing' && me.finished,
+      health: me.health,
+      healthMax: state.config.health.hearts,
       effects: me.effects.map((e) => ({ kind: e.kind, left: e.time, total: e.total })),
       readiness: this.driver.readiness(),
     });

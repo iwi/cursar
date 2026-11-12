@@ -59,6 +59,10 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         footprints: [],
         effects: [],
         controlGuard: 0,
+        health: config.health.hearts,
+        respawnX: start.x,
+        respawnY: start.y,
+        safeTime: 0,
         finished: false,
         finishTime: null,
       };
@@ -210,6 +214,7 @@ export function stepPlayer(
   const impact = movePlayer(map, config, p, input, dt);
   p.terrain = tileAt(map, Math.floor(p.x), Math.floor(p.y));
   tickEffects(config, p, dt, events);
+  p.safeTime = Math.max(0, p.safeTime - dt);
 
   p.bumpCooldown = Math.max(0, p.bumpCooldown - dt);
   if (impact > 2.5 && p.bumpCooldown === 0) {
@@ -247,6 +252,10 @@ export function stepPlayer(
     if (inRect(zone, p.x, p.y)) {
       p.checkpoints[index] = true;
       touched.push(index);
+      // A new checkpoint restores full health and becomes the respawn point.
+      p.health = config.health.hearts;
+      p.respawnX = zone.x + zone.w / 2;
+      p.respawnY = zone.y + zone.h / 2;
     } else {
       remaining++;
     }

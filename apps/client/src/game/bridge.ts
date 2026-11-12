@@ -20,6 +20,8 @@ export interface HudState {
   terrain: string;
   /** The local runner has finished and is watching the others. */
   spectating: boolean;
+  health: number;
+  healthMax: number;
   /** Effects on the local runner: seconds left and in all. */
   effects: { kind: EffectKind; left: number; total: number }[];
   /** Who is ready during the preview (network play only). */
@@ -37,6 +39,8 @@ interface BridgeEvents {
   setPaused: boolean;
   /** Tuning panel (solo only): put an effect on the runner to try it. */
   testEffect: EffectKind;
+  /** Tuning panel (solo only): take a heart from the runner. */
+  testHurt: undefined;
 }
 
 type Handler<T> = (payload: T) => void;

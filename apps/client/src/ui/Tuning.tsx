@@ -46,11 +46,14 @@ export function Tuning({
   config,
   onClose,
   onEffect,
+  onHurt,
 }: {
   config: GameConfig;
   onClose: () => void;
   /** Puts an effect on the runner, to try it during a race. */
   onEffect: (kind: EffectKind) => void;
+  /** Takes a heart from the runner, to try health and respawning. */
+  onHurt: () => void;
 }) {
   const [, refresh] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -94,7 +97,10 @@ export function Tuning({
           </button>
         ))}
       </div>
-      <small>Try an effect during a race. Stunned, Reversed and Confused cannot follow one another straight away (the guard).</small>
+      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onHurt}>
+        Lose a heart
+      </button>
+      <small>Try an effect during a race. Losing your last heart sends you back to the last checkpoint you touched. Stunned, Reversed and Confused cannot follow one another straight away (the guard).</small>
       {EFFECT_SLIDERS.map(slider)}
       <button
         type="button"

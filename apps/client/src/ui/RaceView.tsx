@@ -114,6 +114,11 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
 
       {phase === 'racing' && hud && !hud.spectating && (
         <div className="hud-bottom">
+          <div className="hearts" aria-label={`${hud.health} of ${hud.healthMax} hearts`}>
+            {Array.from({ length: hud.healthMax }, (_, i) => (
+              <i key={i} className={i < hud.health ? 'full' : ''}>♥</i>
+            ))}
+          </div>
           {hud.effects.length > 0 && (
             <div className="effects">
               {hud.effects.map((effect) => (

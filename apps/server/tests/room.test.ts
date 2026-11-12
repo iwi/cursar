@@ -530,3 +530,17 @@ describe('effects in a network race', () => {
     expect(ana!.last('snap').rivals.some((r) => r.id === ben!.id)).toBe(false);
   });
 });
+
+describe('health in a network race', () => {
+  it('shows a rival flickering during their safe time', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const [pa, pb] = room.raceState!.players;
+    pb!.x = pa!.x;
+    pb!.y = pa!.y;
+    pb!.safeTime = 1;
+    ticks(room, 3);
+    expect(ana!.last('snap').rivals.find((r) => r.id === ben!.id)?.safe).toBe(true);
+    expect(ben!.last('snap').you.safeTime).toBeGreaterThan(0);
+  });
+});

@@ -219,6 +219,7 @@ export class NetDriver implements RaceDriver {
         y: from.y + (to.y - from.y) * t,
         facing: from.facing + wrapAngle(to.facing - from.facing) * t,
         fx: to.fx ?? [],
+        safe: to.safe === true,
       });
     }
     return out;

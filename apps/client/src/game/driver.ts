@@ -8,6 +8,7 @@ import {
   type RaceState,
   applyEffect,
   createRace,
+  damage,
   placeMarker,
   removeLastMarker,
   resumeRace,
@@ -31,6 +32,8 @@ export interface Rival {
   facing: number;
   /** Effects on this rival, for drawing. */
   fx: readonly EffectKind[];
+  /** In the safe time after a respawn. */
+  safe: boolean;
 }
 
 export interface Print {
@@ -84,6 +87,8 @@ export interface RaceDriver {
   setPaused(paused: boolean): void;
   /** Solo only: put an effect on the local runner, from the Tuning panel. */
   testEffect?(kind: EffectKind): void;
+  /** Solo only: take a heart from the local runner, from the Tuning panel. */
+  testHurt?(): void;
   destroy(): void;
 }
 
@@ -208,6 +213,14 @@ export class LocalDriver implements RaceDriver {
 
   testEffect(kind: EffectKind): void {
     if (this.state.phase === 'racing') applyEffect(this.state.config, this.me, kind, this.queued);
+  }
+
+  testHurt(): void {
+    if (this.state.phase !== 'racing') return;
+    damage(this.state.config, this.me, 1, this.queued);
+    // A respawn is a jump, not a glide: do not blend from where the runner fell.
+    this.prevX = this.me.x;
+    this.prevY = this.me.y;
   }
 
   destroy(): void {}

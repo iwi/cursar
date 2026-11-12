@@ -3,7 +3,7 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -88,6 +88,8 @@ export interface RivalView {
   facing: number;
   /** Effects on this rival, when there are any, so they can be drawn. */
   fx?: EffectKind[];
+  /** Set during the safe time after a respawn, so the rival can be drawn flickering. */
+  safe?: true;
 }
 
 export interface ResultRow {

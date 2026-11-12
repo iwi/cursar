@@ -2,7 +2,7 @@
 
 A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
 
-It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, has begun with the effect system. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, has begun with effects and health. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Run it
 
@@ -72,7 +72,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 - In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
 - A runner who has finished watches the rest of the race on the full map.
 - After a race the map is revealed with the route each runner took.
-- The **Tuning** button in a race opens live sliders for speed, acceleration, sprint, vision and memory, and for the effects. Its **Effects** buttons put an effect on your runner to try it: Slowed, Haste, Stunned, Reversed, Confused or Blinded (nothing on the maps causes them yet). Changes apply immediately and last until you reload the page. "Copy values" copies the full configuration so the defaults can be updated.
+- The **Tuning** button in a race opens live sliders for speed, acceleration, sprint, vision and memory, and for the effects. Its **Effects** buttons put an effect on your runner to try it: Slowed, Haste, Stunned, Reversed, Confused or Blinded, and **Lose a heart** tries health: you have 3 hearts, a new checkpoint restores them, and losing the last sends you back to the last checkpoint you touched (nothing on the maps causes effects or damage yet). Changes apply immediately and last until you reload the page. "Copy values" copies the full configuration so the defaults can be updated.
 - Turn the sound on. Footsteps tell you the surface, a heartbeat tells you stamina is low, and your nearest checkpoint (or the open finish) pings when you are close.
 
 `CLAUDE.md` holds working notes for Claude Code: commands, layout and the rules of the codebase.
@@ -83,7 +83,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 packages/game-core/   The game rules. Plain TypeScript: no browser, Phaser or network code.
   src/config.ts         Every tunable number.
   src/map/              Map format, seeded generator, validation.
-  src/sim/              Movement, collision, stamina, effects, visibility, race phases.
+  src/sim/              Movement, collision, stamina, effects, health, visibility, race phases.
   src/replay/           Ghost recording and playback.
   src/net/              Messages between page and server, and their validation.
   tests/                Tests for all of the above.

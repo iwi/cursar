@@ -182,6 +182,9 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .stamina { width: 260px; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .stamina div { height: 100%; background: var(--good); border-radius: 6px; }
 .stamina.exhausted div { background: var(--bad); }
+.hearts { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
+.hearts i { font-style: normal; color: rgba(255, 255, 255, 0.18); }
+.hearts i.full { color: #ff5a6e; }
 .effects { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .effect {
   position: relative; overflow: hidden; padding: 3px 10px 5px; border: 2px solid; border-radius: 999px;

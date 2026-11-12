@@ -58,6 +58,12 @@ export interface GameConfig {
     /** Record one sample every N ticks (3 ticks at 60 Hz = 50 ms). */
     sampleEveryTicks: number;
   };
+  health: {
+    /** Hearts a runner starts with, and gets back at each new checkpoint. */
+    hearts: number;
+    /** After respawning, the runner is safe from harm for this long. */
+    respawnSafeSeconds: number;
+  };
   /**
    * Temporary effects on a runner, applied by hazards, traps and skills.
    * `seconds` is how long each lasts unless whatever applies it says otherwise.
@@ -102,6 +108,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
   ghost: { sampleEveryTicks: 3 },
+  health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {
     slow: { seconds: 3, speedMul: 0.6 },
     haste: { seconds: 4, speedMul: 1.3 },

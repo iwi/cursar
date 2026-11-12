@@ -60,6 +60,13 @@ export interface PlayerState {
   effects: ActiveEffect[];
   /** Seconds left in which no new loss-of-control effect can start. */
   controlGuard: number;
+  /** Hearts left. Running out sends the runner back to their respawn point. */
+  health: number;
+  /** Where the runner comes back after running out of hearts: the last checkpoint touched, or the start. */
+  respawnX: number;
+  respawnY: number;
+  /** Seconds left of the safe time after respawning (no damage, no harmful effects). */
+  safeTime: number;
   finished: boolean;
   finishTime: number | null;
 }
@@ -101,5 +108,9 @@ export type GameEvent =
   | { type: 'effectEnd'; playerId: string; kind: EffectKind }
   /** A loss-of-control effect was refused: another was running, or the guard after one was. */
   | { type: 'effectResisted'; playerId: string; kind: EffectKind }
+  /** The runner lost hearts. */
+  | { type: 'hurt'; playerId: string; amount: number; health: number }
+  /** Out of hearts: the runner is back at their respawn point. */
+  | { type: 'respawn'; playerId: string; x: number; y: number }
   /** Network play only: a rival's footstep nearby. Direction and loudness, never a position. */
   | { type: 'rivalStep'; pan: number; closeness: number };
