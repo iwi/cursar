@@ -58,6 +58,17 @@ export type Obstacle =
 
 export type ObstacleKind = Obstacle['kind'];
 
+/** Traps, one tile each. What each does is set in `config.traps`. */
+export const TRAP_KINDS = ['spikes', 'snare', 'glue', 'flash', 'reverse', 'confuse'] as const;
+export type TrapKind = (typeof TRAP_KINDS)[number];
+
+export interface Trap {
+  kind: TrapKind;
+  /** The trap's tile. */
+  x: number;
+  y: number;
+}
+
 /** Versioned map format shared by the generator, the game and (later) the editor. */
 export interface GameMap {
   schema: 1;
@@ -78,6 +89,8 @@ export interface GameMap {
   landmarks: Landmark[];
   /** Moving obstacles. Optional, so hand-made maps without them stay valid. */
   obstacles?: Obstacle[];
+  /** Hidden traps. Optional, like obstacles. */
+  traps?: Trap[];
   /** Present when the map came from the generator. */
   generator?: { seed: string; size: string };
 }

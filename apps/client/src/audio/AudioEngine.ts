@@ -254,6 +254,17 @@ export class AudioEngine {
     this.tone({ freq: closing ? 240 : 180, to: closing ? 120 : 300, dur: 0.18, vol: vol * 0.7, type: 'square', pan });
   }
 
+  /** An armed trap very close by: a faint tick, panned. */
+  trapTell(pan: number, closeness: number): void {
+    this.tone({ freq: 2600, dur: 0.025, vol: 0.015 + 0.06 * closeness, type: 'sine', pan });
+  }
+
+  /** A trap springs under you: a sharp mechanical snap (its effect has its own sound). */
+  trapSpring(): void {
+    this.noise({ dur: 0.06, freq: 2500, q: 3, vol: 0.3 });
+    this.tone({ freq: 900, to: 300, dur: 0.08, vol: 0.18, type: 'square' });
+  }
+
   // --- Effects --------------------------------------------------------------
 
   /** An effect took hold. Each kind has its own sound, so you know what hit you without reading. */

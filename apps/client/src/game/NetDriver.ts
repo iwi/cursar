@@ -25,7 +25,9 @@ interface RivalFrame {
 }
 
 /** Events the server sends for this runner; the page's own prediction of them is not played. */
-const SERVER_CONFIRMS = new Set<GameEvent['type']>(['obstacleHit', 'hurt', 'respawn', 'effect', 'effectResisted']);
+const SERVER_CONFIRMS = new Set<GameEvent['type']>(['obstacleHit', 'trap', 'hurt', 'respawn', 'effect', 'effectResisted']);
+/** A trap this page has just sprung (predicted) stays sprung this many ticks, until the server's word arrives. */
+const LOCAL_SPRING_TICKS = 30;
 
 /** Rivals are drawn this many ticks in the past, so there are always two snapshots to blend between. */
 const INTERPOLATION_TICKS = 6;
@@ -45,6 +47,8 @@ export class NetDriver implements RaceDriver {
   paused = false;
   readonly resultsLayout = 'side';
   private pending: PlayerInput[] = [];
+  /** Traps this page sprang in its own prediction: map trap index to the tick it happened. */
+  private localSprung = new Map<number, number>();
   private seq = 0;
   private accumulator = 0;
   private prevX: number;
@@ -104,6 +108,16 @@ export class NetDriver implements RaceDriver {
     me.footprints = [];
     this.pending = this.pending.filter((input) => input.seq > snapshot.you.lastInputSeq);
     state.raceTicks = snapshot.raceTicks;
+    // Traps: the server lists the sprung ones in view; the rest count as armed,
+    // except one this page has only just sprung itself.
+    const serverTime = snapshot.raceTicks / state.config.tickRate;
+    for (let i = 0; i < state.traps.length; i++) {
+      const sprungAt = this.localSprung.get(i);
+      if (sprungAt !== undefined && state.tick - sprungAt < LOCAL_SPRING_TICKS) continue;
+      this.localSprung.delete(i);
+      state.traps[i] = 0;
+    }
+    for (let i = 0; i + 1 < snapshot.traps.length; i += 2) state.traps[snapshot.traps[i]!] = serverTime + snapshot.traps[i + 1]!;
     const discard: GameEvent[] = [];
     if (snapshot.phase === 'racing' && snapshot.resumeTime === 0) {
       for (const input of this.pending) {
@@ -179,7 +193,10 @@ export class NetDriver implements RaceDriver {
           // Hits are predicted, so a stun is felt at once, but their sounds wait for the server's word.
           const predicted: GameEvent[] = [];
           stepPlayer(state, me, input, dt, predicted, true);
-          for (const event of predicted) if (!SERVER_CONFIRMS.has(event.type)) events.push(event);
+          for (const event of predicted) {
+            if (event.type === 'trap') this.localSprung.set(event.index, state.tick);
+            if (!SERVER_CONFIRMS.has(event.type)) events.push(event);
+          }
         }
       }
     }

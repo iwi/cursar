@@ -560,3 +560,25 @@ describe('obstacles in a network race', () => {
     expect(ben!.last('snap').you.health).toBe(state.config.health.hearts - 1);
   });
 });
+
+describe('traps in a network race', () => {
+  it('tells the runner who sprang a trap, and shows sprung traps only to runners who can see them', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const state = room.raceState!;
+    const pa = state.players[0]!;
+    const pb = state.players[1]!;
+    // Ben far away from Ana, standing on a fresh trap.
+    pb.x = pa.x + 30;
+    pb.y = pa.y;
+    while (isSolid(state.map, Math.floor(pb.x), Math.floor(pb.y))) pb.x -= 1;
+    state.map.traps = [{ kind: 'glue', x: Math.floor(pb.x), y: Math.floor(pb.y) }];
+    state.traps = [0];
+    ticks(room, 3);
+    const benEvents = ben!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : []));
+    expect(benEvents.map((e) => e.type)).toEqual(expect.arrayContaining(['trap', 'effect']));
+    expect(ben!.last('snap').traps.slice(0, 1)).toEqual([0]);
+    expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).some((e) => e.type === 'trap')).toBe(false);
+    expect(ana!.last('snap').traps).toEqual([]);
+  });
+});

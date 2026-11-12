@@ -9,6 +9,7 @@ export * from './sim/types';
 export * from './sim/effects';
 export * from './sim/health';
 export * from './sim/obstacles';
+export * from './sim/traps';
 export * from './sim/movement';
 export * from './sim/visibility';
 export * from './sim/race';

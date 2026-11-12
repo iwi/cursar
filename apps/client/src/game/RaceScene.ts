@@ -7,6 +7,7 @@ import {
   type Landmark,
   type Obstacle,
   TERRAIN,
+  type Trap,
   Tile,
   computeVisibility,
   createAutopilot,
@@ -17,8 +18,9 @@ import {
   gateClosed,
   hasEffect,
   obstacleTime,
+  trapArmed,
 } from '@cursar/game-core';
-import { EFFECT_STYLE } from './effects';
+import { EFFECT_STYLE, TRAP_STYLE } from './effects';
 import Phaser from 'phaser';
 import type { AudioEngine } from '../audio/AudioEngine';
 import type { Bridge } from './bridge';
@@ -145,6 +147,7 @@ export class RaceScene extends Phaser.Scene {
   private ghostStride = 0;
   private ghostLast: { x: number; y: number } | null = null;
   private rumbleTimer = 0;
+  private tellTimer = 0;
   /** Per obstacle: the last quarter turn of a barrier, or whether a gate was closed, for their sounds. */
   private obstacleMarks = new Map<Obstacle, number>();
   private unsubscribe: (() => void)[] = [];
@@ -347,6 +350,12 @@ export class RaceScene extends Phaser.Scene {
           audio.controlBack();
         }
         break;
+      case 'trap':
+        if (event.playerId === me.id) {
+          audio.trapSpring();
+          bridge.emit('notice', TRAP_STYLE[event.kind].label);
+        }
+        break;
       case 'hurt':
         if (event.playerId === me.id) {
           audio.hurt(event.health);
@@ -411,6 +420,26 @@ export class RaceScene extends Phaser.Scene {
     this.ghostLast = g;
 
     this.obstacleAudio(dt);
+    this.trapAudio(dt);
+  }
+
+  /** The nearest armed trap within earshot ticks faintly: the trap tell. */
+  private trapAudio(dt: number): void {
+    this.tellTimer -= dt;
+    if (this.tellTimer > 0) return;
+    this.tellTimer = 0.5;
+    const { state } = this;
+    const me = this.me();
+    const range = state.config.traps.tellDistance;
+    let nearest: { dx: number; dist: number } | null = null;
+    (this.data_.map.traps ?? []).forEach((trap, i) => {
+      if (!trapArmed(state, i)) return;
+      const dx = trap.x + 0.5 - me.x;
+      const dist = Math.hypot(dx, trap.y + 0.5 - me.y);
+      if (dist < range && (!nearest || dist < nearest.dist)) nearest = { dx, dist };
+    });
+    const found = nearest as { dx: number; dist: number } | null;
+    if (found) this.data_.audio.trapTell(found.dx / 3, 1 - found.dist / range);
   }
 
   /**
@@ -742,6 +771,7 @@ export class RaceScene extends Phaser.Scene {
       }
     }
 
+    this.drawTraps(g);
     this.drawObstacles(g);
 
     // Rivals. In a race the server only sends the ones inside your view.
@@ -831,6 +861,90 @@ export class RaceScene extends Phaser.Scene {
         const target = this.objective(px, py);
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
       }
+    }
+  }
+
+  /**
+   * Traps. The preview and the full map show them all. In the race an armed
+   * trap shows only when you are close to it; a sprung one shows wherever you
+   * can see it (it is safe until it re-arms).
+   */
+  private drawTraps(g: Phaser.GameObjects.Graphics): void {
+    const { state } = this;
+    const me = this.me();
+    const all = !this.racingView() || this.peeking();
+    const reveal = state.config.traps.revealDistance;
+    (this.data_.map.traps ?? []).forEach((trap, i) => {
+      const armed = trapArmed(state, i);
+      const cx = trap.x + 0.5;
+      const cy = trap.y + 0.5;
+      if (!all) {
+        if (!this.isVisibleTile(cx, cy)) return;
+        if (armed && Math.hypot(cx - me.x, cy - me.y) > reveal) return;
+      }
+      this.drawTrap(g, trap, armed, all ? 1.8 : 1);
+    });
+  }
+
+  /** One trap: a dark plate with the kind's sign. `k` scales it up on the whole-map views, so it can be picked out. */
+  private drawTrap(g: Phaser.GameObjects.Graphics, trap: Trap, armed: boolean, k: number): void {
+    const { color } = TRAP_STYLE[trap.kind];
+    const alpha = armed ? 1 : 0.35;
+    const cx = (trap.x + 0.5) * PX;
+    const cy = (trap.y + 0.5) * PX;
+    const half = (PX / 2 - 3) * k;
+    const at = (dx: number, dy: number) => ({ x: cx + dx * k, y: cy + dy * k });
+    g.fillStyle(0x10131a, 0.8 * alpha).fillRoundedRect(cx - half, cy - half, half * 2, half * 2, 5 * k);
+    g.lineStyle(2 * Math.min(k, 1.6), color, alpha).strokeRoundedRect(cx - half, cy - half, half * 2, half * 2, 5 * k);
+    g.fillStyle(color, alpha);
+    g.lineStyle(2.5 * Math.min(k, 1.6), color, alpha);
+    const line = (x0: number, y0: number, x1: number, y1: number) => {
+      const a = at(x0, y0);
+      const b = at(x1, y1);
+      g.lineBetween(a.x, a.y, b.x, b.y);
+    };
+    const tri = (x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) => {
+      const a = at(x0, y0);
+      const b = at(x1, y1);
+      const c = at(x2, y2);
+      g.fillTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
+    };
+    switch (trap.kind) {
+      case 'spikes':
+        for (const ox of [-7, 0, 7]) tri(ox - 3.5, 6, ox, -6, ox + 3.5, 6);
+        break;
+      case 'snare':
+        g.strokeCircle(cx, cy, 7 * k);
+        for (let n = 0; n < 6; n++) {
+          const a = (n * Math.PI) / 3;
+          line(Math.cos(a) * 7, Math.sin(a) * 7, Math.cos(a) * 3.5, Math.sin(a) * 3.5);
+        }
+        break;
+      case 'glue':
+        g.fillCircle(cx - 3 * k, cy + 1 * k, 5 * k);
+        g.fillCircle(cx + 3 * k, cy - 1 * k, 4 * k);
+        g.fillCircle(cx + 4 * k, cy + 5 * k, 2.5 * k);
+        break;
+      case 'flash':
+        line(-8, 0, 8, 0);
+        line(0, -8, 0, 8);
+        line(-5, -5, 5, 5);
+        line(-5, 5, 5, -5);
+        break;
+      case 'reverse':
+        line(-7, -3, 7, -3);
+        tri(7, -6, 10, -3, 7, 0);
+        line(-7, 4, 7, 4);
+        tri(-7, 1, -10, 4, -7, 7);
+        break;
+      case 'confuse':
+        g.beginPath();
+        g.arc(cx, cy, 7 * k, 0, Math.PI * 1.5, false);
+        g.strokePath();
+        g.beginPath();
+        g.arc(cx, cy, 3.5 * k, Math.PI, Math.PI * 2.6, false);
+        g.strokePath();
+        break;
     }
   }
 

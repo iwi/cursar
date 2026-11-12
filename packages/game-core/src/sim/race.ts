@@ -3,6 +3,7 @@ import { type GameMap, inRect, isSolid, tileAt } from '../map/types';
 import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
 import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstacles';
+import { springTraps } from './traps';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -34,6 +35,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
     raceTime: 0,
     deadline: config.race.timeLimitSeconds,
     resumeTime: 0,
+    traps: (map.traps ?? []).map(() => 0),
     players: players.map((setup, i): PlayerState => {
       const start = map.startPositions[setup.slot ?? i];
       if (!start) throw new Error(`No start position for slot ${setup.slot ?? i}.`);
@@ -220,6 +222,7 @@ export function stepPlayer(
   p.safeTime = Math.max(0, p.safeTime - dt);
   p.hitGuard = Math.max(0, p.hitGuard - dt);
   hitObstacles(state, p, events);
+  springTraps(state, p, events);
 
   p.bumpCooldown = Math.max(0, p.bumpCooldown - dt);
   if (impact > 2.5 && p.bumpCooldown === 0) {

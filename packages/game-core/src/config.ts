@@ -72,6 +72,21 @@ export interface GameConfig {
     /** After a hit, obstacles pass through you for this long, so one cannot hit you twice in a row. */
     hitGuardSeconds: number;
   };
+  /** Hidden traps, one tile each, placed by the map. */
+  traps: {
+    /** A sprung trap is safe for this long, then arms again. */
+    rearmSeconds: number;
+    /** In the race an armed trap is only seen within this distance (tiles). Always shown in the preview. */
+    revealDistance: number;
+    /** An armed trap makes a faint sound within this distance (tiles). */
+    tellDistance: number;
+    spikesDamage: number;
+    snareStunSeconds: number;
+    glueSlowSeconds: number;
+    flashBlindSeconds: number;
+    /** Reversed or confused controls from a trick tile. */
+    trickSeconds: number;
+  };
   health: {
     /** Hearts a runner starts with, and gets back at each new checkpoint. */
     hearts: number;
@@ -130,6 +145,16 @@ export const DEFAULT_CONFIG: GameConfig = {
     hitStunSeconds: 0.5,
     knockSpeed: 6,
     hitGuardSeconds: 1,
+  },
+  traps: {
+    rearmSeconds: 10,
+    revealDistance: 2,
+    tellDistance: 2.5,
+    spikesDamage: 1,
+    snareStunSeconds: 1,
+    glueSlowSeconds: 4,
+    flashBlindSeconds: 5,
+    trickSeconds: 1,
   },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {

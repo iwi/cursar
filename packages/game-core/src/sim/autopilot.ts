@@ -30,8 +30,8 @@ const AXES: Move[] = [{ mx: 1, my: 0 }, { mx: -1, my: 0 }, { mx: 0, my: 1 }, { m
  * finish, walking downhill on each target's distance field. Used by tests, the
  * client's demo mode and computer players.
  *
- * Given a `caution`, it also watches the obstacles (see `carefulMove`), and
- * its route keeps clear of barrier posts. Without this it would walk into the
+ * Its route steps round traps. Given a `caution`, it also watches the
+ * obstacles (see `carefulMove`), and its route keeps clear of barrier posts. Without this it would walk into the
  * same boulder on every attempt after a respawn. Caution has a limit: a runner
  * that has made no progress for a few seconds takes its chances, as a person
  * would, rather than waiting for ever.
@@ -149,11 +149,15 @@ function carefulMove(
   return best;
 }
 
-/** A copy of the map with the tiles round each barrier's post made solid (for planning only). */
+/**
+ * A copy of the map for planning only, with trap tiles (computer players know
+ * the map) and the tiles round each barrier's post made solid.
+ */
 function avoidPosts(map: GameMap): GameMap {
   const posts = (map.obstacles ?? []).filter((o) => o.kind === 'barrier');
-  if (posts.length === 0) return map;
+  if (posts.length === 0 && !map.traps?.length) return map;
   const tiles = [...map.tiles];
+  for (const trap of map.traps ?? []) tiles[trap.y * map.width + trap.x] = Tile.Wall;
   for (const o of posts) {
     for (let y = Math.floor(o.y - POST_BERTH); y <= Math.ceil(o.y + POST_BERTH); y++) {
       for (let x = Math.floor(o.x - POST_BERTH); x <= Math.ceil(o.x + POST_BERTH); x++) {

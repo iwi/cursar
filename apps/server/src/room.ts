@@ -450,7 +450,7 @@ export class Room {
         urgent = true;
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
-      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit') {
+      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit' || event.type === 'trap') {
         // Effects and damage come from the server (hazards, traps), so the runner's page cannot predict them.
         const index = state.players.findIndex((p) => p.id === event.playerId);
         const member = race.racers[index];
@@ -515,6 +515,14 @@ export class Room {
         }
       }
 
+      // Sprung traps, only where this runner can see: a trap springing out of
+      // sight would give away where a rival is.
+      const traps: number[] = [];
+      (map.traps ?? []).forEach((trap, index) => {
+        const left = state.traps[index]! - state.raceTime;
+        if (left > 0 && inView(trap.x + 0.5, trap.y + 0.5)) traps.push(index, round(left, 10));
+      });
+
       member.send({
         t: 'snap',
         tick: state.tick,
@@ -526,6 +534,7 @@ export class Room {
         you: selfState(p),
         rivals,
         prints,
+        traps,
         readyCount,
         paused: this.paused,
         events: member.events,

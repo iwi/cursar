@@ -1,19 +1,19 @@
 import { Rng } from '../rng';
-import { type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, Tile } from './types';
+import { type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
 export type MapSize = 'small' | 'medium' | 'large';
 
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
-export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; obstacles: number; label: string }> = {
-  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, label: 'Small' },
-  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, label: 'Medium' },
-  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, label: 'Large' },
+export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; label: string }> = {
+  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, label: 'Small' },
+  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, label: 'Medium' },
+  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, label: 'Large' },
 };
 
 /** Bumped whenever the generator changes, so saved ghosts never play on a different layout. */
-const GENERATOR_VERSION = 5;
+const GENERATOR_VERSION = 6;
 
 export interface GenerateOptions {
   seed: string;
@@ -26,6 +26,8 @@ export interface GenerateOptions {
   checkpoints?: number;
   /** Number of moving obstacles (defaults to the size's own count). */
   obstacles?: number;
+  /** Number of traps (defaults to the size's own count). */
+  traps?: number;
 }
 
 const PITCH = 3;
@@ -329,6 +331,27 @@ export function generateMap(options: GenerateOptions): GameMap {
   }
 
 
+  // 8. Traps: one tile in a plain corridor cell (not in plazas, in or next to
+  //    the start, the finish, checkpoints, mud or ice, or near an obstacle), at least a
+  //    cell apart. A corridor is two tiles wide, so a runner who remembers a
+  //    trap can step round it. The kinds take turns, so every kind appears.
+  const trapCount = options.traps ?? MAP_SIZES[size].traps;
+  const trapKinds = rng.shuffle([...TRAP_KINDS]);
+  const traps: Trap[] = [];
+  for (let attempts = 0; traps.length < trapCount && attempts < 600; attempts++) {
+    const c = rng.int(cols);
+    const r = rng.int(rows);
+    if (!free(c, r)) continue;
+    // Not right outside the start, where everyone leaves together.
+    if (c >= startC - 1 && c <= startC + 2 && r >= startR - 1 && r <= startR + 2) continue;
+    const x = c * PITCH + 1 + rng.int(2);
+    const y = r * PITCH + 1 + rng.int(2);
+    if (get(x, y) !== Tile.Floor) continue;
+    traps.push({ kind: trapKinds[traps.length % trapKinds.length]!, x, y });
+    reserve(c - 1, r - 1, c + 1, r + 1);
+  }
+  base.traps = traps;
+
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);
   return base;
@@ -368,5 +391,6 @@ export function flipMap(map: GameMap, flipX: boolean, flipY: boolean): GameMap {
       if (o.kind === 'barrier') return { ...o, x: px(o.x), y: py(o.y), dir: flipX !== flipY ? (-o.dir as 1 | -1) : o.dir };
       return { ...o, ...rect(o) };
     }),
+    traps: map.traps?.map((t) => ({ ...t, x: flipX ? width - 1 - t.x : t.x, y: flipY ? height - 1 - t.y : t.y })),
   };
 }

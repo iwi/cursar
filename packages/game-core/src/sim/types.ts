@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { GameMap, ObstacleKind, Point } from '../map/types';
+import type { GameMap, ObstacleKind, Point, TrapKind } from '../map/types';
 
 /** One tick of player intent. `seq` lets a server acknowledge inputs for client prediction. */
 export interface PlayerInput {
@@ -89,6 +89,8 @@ export interface RaceState {
   deadline: number;
   /** Seconds left in the count after a pause. Nobody moves and the clock stands still while it runs. */
   resumeTime: number;
+  /** Per map trap: the race time at which it is armed again (0 or past = armed). */
+  traps: number[];
   players: PlayerState[];
 }
 
@@ -112,6 +114,8 @@ export type GameEvent =
   | { type: 'effectResisted'; playerId: string; kind: EffectKind }
   /** A boulder or barrier hit the runner, or a gate closed on them (the lost heart and the stun follow as their own events). */
   | { type: 'obstacleHit'; playerId: string; kind: ObstacleKind }
+  /** The runner sprang a trap (its effect follows as its own events). */
+  | { type: 'trap'; playerId: string; index: number; kind: TrapKind }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */
