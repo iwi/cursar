@@ -124,14 +124,14 @@ Agreed for later phases:
 | Storage | Browser storage for settings and best runs. SQLite waits until profiles and statistics. | Built |
 | Events | The simulation reports what happened (footstep, bump, finish and so on) as events. Audio and effects listen to them. | Built |
 | Effect system | To be built first in Phase 3, before terrain hazards and traps. | Agreed |
-| Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. | Built (going online on Railway) |
+| Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. Online since 12 November at https://cursarserver-production.up.railway.app (a room created, joined from a second browser and raced). | Online |
 | Phaser version | Phaser 3.90, the final and most widely documented release of version 3. Version 4 exists; because rendering is kept separate from the game rules, moving later affects only `apps/client/src/game`. | Built |
 
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
 2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
-3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Code done 12 November; host chosen: Railway. Still to do: create the Railway service and check a real game over the internet.*
+3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Still worth doing: a real game with players on different networks.*
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio.
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level.
 6. **Phase 5: map editor.** Using the same map format the generator already produces.

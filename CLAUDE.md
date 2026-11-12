@@ -36,6 +36,6 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 
 ## Where the project is
 
-Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel) and the code for Phase 2b (rooms with codes, removing players, ready to host behind HTTPS). Still open for 2b: putting it online on Railway (chosen host) and checking a real game over the internet. Next: Phase 3 hazards starting with the effect system. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
+Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel) and Phase 2b (rooms with codes, removing players), online on Railway at https://cursarserver-production.up.railway.app. Pushing game changes to `main` redeploys it and closes open rooms. Next: Phase 3 hazards starting with the effect system. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
 
 The owner writes in British English; keep user-facing text in British English.

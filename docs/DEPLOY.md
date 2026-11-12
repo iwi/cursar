@@ -40,8 +40,8 @@ Railway sets `PORT` itself; the server listens on it. `TRUST_PROXY=1` is already
 ### First time
 
 1. Push `main` to GitHub: Railway deploys what is on GitHub, not what is on your computer.
-2. On railway.com, sign in with GitHub and choose **New Project → Deploy from GitHub repo → cursar**. Allow Railway access to that repository when asked. The first build takes a few minutes.
-3. Open the service, then **Settings → Networking → Generate Domain**. If it asks for a port, give the one the deploy logs print after "listening on port". This gives an address like `cursar-production.up.railway.app`. A custom domain can be added in the same place later.
+2. On railway.com, sign in with GitHub and choose **New Project → Deploy from GitHub repo → cursar**. Allow Railway access to that repository when asked. The first build takes a few minutes. Railway may notice the packages in this repository and offer, or create, a service for each one (`cursar/client`, `cursar/server`). Cursar needs only one: keep the server service, delete the others, and check its **Settings → Source → Root Directory** is empty so it builds the `Dockerfile` from the top of the repository.
+3. Click the service's box, open its **Settings** tab (each service has its own; the project settings do not have this), and under **Networking → Public Networking** choose **Generate Domain**. If it asks for a port, give the one the deploy logs print after "listening on port". This gives an address like `cursar-production.up.railway.app`. A custom domain can be added in the same place later.
 4. **Settings → Deploy → Region**: choose the one nearest the players.
 5. Check it: `https://<your address>/health` should answer `{"ok":true,"rooms":0}`. Then create a room on one device and join it from another device on a different network, such as a phone on mobile data.
 
