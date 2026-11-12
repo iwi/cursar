@@ -1,5 +1,6 @@
 import { planRoute } from '../map/route';
 import { type GameMap, Tile, isSolid } from '../map/types';
+import { patrollerDanger } from './enemies';
 import { dangerAt, obstacleTime } from './obstacles';
 import type { PlayerInput, RaceState } from './types';
 
@@ -72,7 +73,7 @@ export function createAutopilot(
     const next = plan.order.find((index) => !p.checkpoints[index]);
     const dist = plan.fields[next ?? map.checkpoints.length]!;
     const dir = routeDir(dist, p.x, p.y);
-    if (caution && map.obstacles && map.obstacles.length > 0) {
+    if (caution && (map.obstacles?.length || map.enemies?.length)) {
       const now = obstacleTime(caution.state);
       const target = next ?? -1;
       let record = progress.get(p);
@@ -128,7 +129,7 @@ function carefulMove(
         x = nx;
         y = ny;
       }
-      if (dangerAt(state, now + t, x, y, BERTH)) return { hitAt: t, x, y };
+      if (dangerAt(state, now + t, x, y, BERTH) || patrollerDanger(state, now + t, x, y, BERTH)) return { hitAt: t, x, y };
     }
     return { hitAt: Infinity, x, y };
   };

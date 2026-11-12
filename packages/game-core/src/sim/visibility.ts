@@ -12,6 +12,11 @@ export function visionRange(vision: GameConfig['vision'], angle: number): number
   return 1 / Math.sqrt((c / along) ** 2 + (s / vision.side) ** 2);
 }
 
+/** Whether the straight line between two points is clear of walls (used for vision and by enemies). */
+export function lineOfSight(map: GameMap, x0: number, y0: number, x1: number, y1: number): boolean {
+  return !sightBlocked(map, x0, y0, x1, y1);
+}
+
 function sightBlocked(map: GameMap, x0: number, y0: number, x1: number, y1: number): boolean {
   const dist = Math.hypot(x1 - x0, y1 - y0);
   const steps = Math.ceil(dist / 0.2);

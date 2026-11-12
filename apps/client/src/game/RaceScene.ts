@@ -18,9 +18,10 @@ import {
   gateClosed,
   hasEffect,
   obstacleTime,
+  patrollerPosition,
   trapArmed,
 } from '@cursar/game-core';
-import { EFFECT_STYLE, TRAP_STYLE } from './effects';
+import { ENEMY_LABEL, EFFECT_STYLE, TRAP_STYLE } from './effects';
 import Phaser from 'phaser';
 import type { AudioEngine } from '../audio/AudioEngine';
 import type { Bridge } from './bridge';
@@ -148,6 +149,8 @@ export class RaceScene extends Phaser.Scene {
   private ghostLast: { x: number; y: number } | null = null;
   private rumbleTimer = 0;
   private tellTimer = 0;
+  /** Per patroller (map enemy index): where it was and how far it has walked since its last step sound. */
+  private patrolSteps = new Map<number, { x: number; y: number; stride: number }>();
   /** Per obstacle: the last quarter turn of a barrier, or whether a gate was closed, for their sounds. */
   private obstacleMarks = new Map<Obstacle, number>();
   private unsubscribe: (() => void)[] = [];
@@ -356,6 +359,12 @@ export class RaceScene extends Phaser.Scene {
           bridge.emit('notice', TRAP_STYLE[event.kind].label);
         }
         break;
+      case 'enemyHit':
+        if (event.playerId === me.id) bridge.emit('notice', ENEMY_LABEL[event.kind]);
+        break;
+      case 'foeHeard':
+        audio.foe(event.sound, event.pan, event.closeness, event.aimed);
+        break;
       case 'hurt':
         if (event.playerId === me.id) {
           audio.hurt(event.health);
@@ -421,6 +430,29 @@ export class RaceScene extends Phaser.Scene {
 
     this.obstacleAudio(dt);
     this.trapAudio(dt);
+    this.patrollerAudio();
+  }
+
+  /** Patrollers follow the clock, so their regular steps are worked out here. */
+  private patrollerAudio(): void {
+    const { state } = this;
+    const me = this.me();
+    const t = obstacleTime(state);
+    const range = 9;
+    (this.data_.map.enemies ?? []).forEach((e, index) => {
+      if (e.kind !== 'patroller') return;
+      const at = patrollerPosition(state.config, e, t);
+      const last = this.patrolSteps.get(index) ?? { x: at.x, y: at.y, stride: 0 };
+      last.stride += Math.hypot(at.x - last.x, at.y - last.y);
+      last.x = at.x;
+      last.y = at.y;
+      if (last.stride >= 0.9) {
+        last.stride = 0;
+        const dist = Math.hypot(at.x - me.x, at.y - me.y);
+        if (dist < range) this.data_.audio.patrollerStep((at.x - me.x) / 6, 1 - dist / range);
+      }
+      this.patrolSteps.set(index, last);
+    });
   }
 
   /** The nearest armed trap within earshot ticks faintly: the trap tell. */
@@ -773,6 +805,7 @@ export class RaceScene extends Phaser.Scene {
 
     this.drawTraps(g);
     this.drawObstacles(g);
+    this.drawEnemies(g);
 
     // Rivals. In a race the server only sends the ones inside your view.
     const r = state.config.player.radius * PX;
@@ -861,6 +894,76 @@ export class RaceScene extends Phaser.Scene {
         const target = this.objective(px, py);
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
       }
+    }
+  }
+
+  /**
+   * Enemies. Patrollers follow the clock and are worked out here; chasers,
+   * turrets and bolts come from the driver (in network play, only those in
+   * view). During the race only what is inside your view is drawn.
+   */
+  private drawEnemies(g: Phaser.GameObjects.Graphics): void {
+    const { state } = this;
+    const { config } = state;
+    const spawns = this.data_.map.enemies ?? [];
+    const t = obstacleTime(state);
+    // Larger on the whole-map views, so they can be picked out and remembered.
+    const whole = !this.racingView() || this.peeking();
+    const k = whole ? 1.8 : 1;
+    spawns.forEach((e) => {
+      if (e.kind !== 'patroller') return;
+      if (whole) {
+        // The beat it walks.
+        g.lineStyle(3, 0x8e5bd6, 0.45).lineBetween(e.ax * PX, e.ay * PX, e.bx * PX, e.by * PX);
+      }
+      const at = patrollerPosition(config, e, t);
+      if (!this.isVisibleTile(at.x, at.y)) return;
+      const r = config.enemies.patroller.radius * PX * k;
+      const x = at.x * PX;
+      const y = at.y * PX;
+      const heading = Math.atan2(e.by - e.ay, e.bx - e.ax);
+      // A purple diamond with a pointer.
+      const pts = [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].map((a) => ({ x: x + Math.cos(a + heading) * r * 1.25, y: y + Math.sin(a + heading) * r * 1.25 }));
+      g.fillStyle(0x8e5bd6, 1).fillPoints(pts, true);
+      g.lineStyle(2, 0x2a1640, 1).strokePoints(pts, true, true);
+      g.fillStyle(0xffe066, 1).fillCircle(x, y, r * 0.35);
+    });
+    // The full map during the race shows where turrets stand and chasers live
+    // (that is part of the map), never where a chaser is now.
+    const shown = this.peeking()
+      ? spawns.flatMap((e, index) => (e.kind === 'patroller' ? [] : [{ index, x: e.x, y: e.y, angle: Math.PI / 2, mode: 0 }]))
+      : this.driver.foes();
+    for (const foe of shown) {
+      const spawn = spawns[foe.index];
+      if (!spawn || !this.isVisibleTile(foe.x, foe.y)) continue;
+      const x = foe.x * PX;
+      const y = foe.y * PX;
+      if (spawn.kind === 'chaser') {
+        const r = config.enemies.chaser.radius * PX * k;
+        const awake = foe.mode !== 0;
+        g.fillStyle(awake ? 0xd9342b : 0x7a2a26, 1).fillCircle(x, y, r);
+        g.lineStyle(2, 0x2b0907, 1).strokeCircle(x, y, r);
+        // Eyes: open and looking ahead when awake, shut when asleep.
+        for (const side of [-0.45, 0.45]) {
+          const ex = x + Math.cos(foe.angle + side) * r * 0.55;
+          const ey = y + Math.sin(foe.angle + side) * r * 0.55;
+          if (awake) g.fillStyle(0xfff3a0, 1).fillCircle(ex, ey, r * 0.22);
+          else g.lineStyle(2, 0xffb3a8, 1).lineBetween(ex - r * 0.18, ey, ex + r * 0.18, ey);
+        }
+      } else {
+        // A turret: a square base and a barrel that glows while it whirs.
+        const s = PX * 0.36 * k;
+        g.fillStyle(0x3a4252, 1).fillRect(x - s, y - s, s * 2, s * 2);
+        g.lineStyle(2, 0x10131a, 1).strokeRect(x - s, y - s, s * 2, s * 2);
+        g.lineStyle(6, foe.mode === 1 ? 0xff9f1c : 0xaab4c8, 1);
+        g.lineBetween(x, y, x + Math.cos(foe.angle) * PX * 0.55 * k, y + Math.sin(foe.angle) * PX * 0.55 * k);
+        g.fillStyle(foe.mode === 1 ? 0xff9f1c : 0x5d6a80, 1).fillCircle(x, y, s * 0.55);
+      }
+    }
+    for (const b of this.driver.bolts()) {
+      if (!this.isVisibleTile(b.x, b.y)) continue;
+      g.fillStyle(0xffb347, 0.35).fillCircle(b.x * PX, b.y * PX, config.enemies.turret.boltRadius * PX * 2);
+      g.fillStyle(0xfff0c2, 1).fillCircle(b.x * PX, b.y * PX, config.enemies.turret.boltRadius * PX);
     }
   }
 

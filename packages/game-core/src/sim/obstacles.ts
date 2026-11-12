@@ -103,26 +103,42 @@ export function overlap(
 }
 
 /**
- * A hit: costs hearts, puts the runner at (x, y) moving away along (nx, ny)
- * and stuns them briefly; then obstacles pass through them for a moment so the
- * same one cannot hit again straight away.
+ * Knocks a runner: puts them at (x, y) moving away along (nx, ny), costs
+ * `hearts`, then stuns them for `stunSeconds` (unless that sent them back to a
+ * checkpoint). Obstacles and enemies then pass through them for a moment, so
+ * the same one cannot hit again straight away. The caller reports what hit them.
  */
-function hit(state: RaceState, p: PlayerState, kind: Obstacle['kind'], x: number, y: number, nx: number, ny: number, events: GameEvent[]): void {
+export function knock(
+  state: RaceState,
+  p: PlayerState,
+  x: number,
+  y: number,
+  nx: number,
+  ny: number,
+  hearts: number,
+  stunSeconds: number,
+  events: GameEvent[],
+): void {
   const { map, config } = state;
-  const { obstacles } = config;
-  p.hitGuard = obstacles.hitGuardSeconds;
-  events.push({ type: 'obstacleHit', playerId: p.id, kind });
+  p.hitGuard = config.obstacles.hitGuardSeconds;
   const fromX = p.x;
   const fromY = p.y;
   p.x = x;
   p.y = y;
-  p.vx = nx * obstacles.knockSpeed;
-  p.vy = ny * obstacles.knockSpeed;
+  p.vx = nx * config.obstacles.knockSpeed;
+  p.vy = ny * config.obstacles.knockSpeed;
   resolveWalls(map, p, config.player.radius, fromX, fromY, closedGateCheck(map, config, obstacleTime(state)));
   const before = events.length;
-  damage(config, p, obstacles.hitDamage, events);
+  damage(config, p, hearts, events);
   const respawned = events.slice(before).some((e) => e.type === 'respawn');
-  if (!respawned) applyEffect(config, p, 'stun', events, obstacles.hitStunSeconds);
+  if (!respawned && stunSeconds > 0) applyEffect(config, p, 'stun', events, stunSeconds);
+}
+
+/** An obstacle hit: a heart and a short stun (see `knock`). */
+function hit(state: RaceState, p: PlayerState, kind: Obstacle['kind'], x: number, y: number, nx: number, ny: number, events: GameEvent[]): void {
+  events.push({ type: 'obstacleHit', playerId: p.id, kind });
+  const { obstacles } = state.config;
+  knock(state, p, x, y, nx, ny, obstacles.hitDamage, obstacles.hitStunSeconds, events);
 }
 
 /** Checks whether a boulder or barrier has hit the runner. */

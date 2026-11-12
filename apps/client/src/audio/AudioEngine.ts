@@ -265,6 +265,39 @@ export class AudioEngine {
     this.tone({ freq: 900, to: 300, dur: 0.08, vol: 0.18, type: 'square' });
   }
 
+  // --- Enemies --------------------------------------------------------------
+
+  /** A patroller's heavy, regular step. */
+  patrollerStep(pan: number, closeness: number): void {
+    this.noise({ dur: 0.07, freq: 260, filter: 'lowpass', vol: 0.03 + 0.22 * closeness, pan });
+    this.tone({ freq: 90, dur: 0.08, vol: 0.02 + 0.12 * closeness, type: 'sine', pan });
+  }
+
+  /** A chaser or turret. A growl rises in pitch when it is after you. */
+  foe(sound: string, pan: number, closeness: number, aimed: boolean): void {
+    const vol = 0.03 + 0.27 * closeness;
+    switch (sound) {
+      case 'snore':
+        this.noise({ dur: 0.9, freq: 300, filter: 'lowpass', vol: vol * 0.5, pan, attack: 0.4 });
+        break;
+      case 'wake':
+        this.tone({ freq: 120, to: 260, dur: 0.4, vol, type: 'sawtooth', pan });
+        this.noise({ dur: 0.35, freq: 500, q: 2, vol: vol * 0.6, pan });
+        break;
+      case 'growl':
+        this.tone({ freq: aimed ? 150 : 95, to: aimed ? 190 : 85, dur: 0.35, vol: vol * (aimed ? 1.2 : 0.8), type: 'sawtooth', pan, attack: 0.03 });
+        this.noise({ dur: 0.3, freq: aimed ? 420 : 260, q: 3, vol: vol * 0.5, pan });
+        break;
+      case 'whir':
+        this.tone({ freq: 300, to: 1400, dur: 0.75, vol: vol * 0.7, type: 'triangle', pan, attack: 0.1 });
+        break;
+      case 'fire':
+        this.tone({ freq: 1600, to: 400, dur: 0.15, vol, type: 'square', pan });
+        this.noise({ dur: 0.08, freq: 3000, q: 2, vol: vol * 0.6, pan });
+        break;
+    }
+  }
+
   // --- Effects --------------------------------------------------------------
 
   /** An effect took hold. Each kind has its own sound, so you know what hit you without reading. */

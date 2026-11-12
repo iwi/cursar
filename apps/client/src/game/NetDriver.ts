@@ -4,6 +4,7 @@ import {
   type PlayerInput,
   type RaceState,
   type ResultRow,
+  type FoeView,
   type RivalView,
   type ServerMessage,
   createRace,
@@ -13,7 +14,7 @@ import {
   wrapAngle,
 } from '@cursar/game-core';
 import type { Connection } from '../net/Connection';
-import type { MoveIntent, Print, RaceDriver, Rival, Track } from './driver';
+import type { FoeSprite, MoveIntent, Print, RaceDriver, Rival, Track } from './driver';
 
 type RaceStart = Extract<ServerMessage, { t: 'race' }>;
 type Snapshot = Extract<ServerMessage, { t: 'snap' }>;
@@ -22,10 +23,12 @@ interface RivalFrame {
   tick: number;
   at: number;
   rivals: Map<string, RivalView>;
+  foes: Map<number, FoeView>;
+  bolts: Map<number, { x: number; y: number }>;
 }
 
 /** Events the server sends for this runner; the page's own prediction of them is not played. */
-const SERVER_CONFIRMS = new Set<GameEvent['type']>(['obstacleHit', 'trap', 'hurt', 'respawn', 'effect', 'effectResisted']);
+const SERVER_CONFIRMS = new Set<GameEvent['type']>(['obstacleHit', 'trap', 'enemyHit', 'hurt', 'respawn', 'effect', 'effectResisted']);
 /** A trap this page has just sprung (predicted) stays sprung this many ticks, until the server's word arrives. */
 const LOCAL_SPRING_TICKS = 30;
 
@@ -143,7 +146,15 @@ export class NetDriver implements RaceDriver {
       this.errY = 0;
     }
 
-    this.frames.push({ tick: snapshot.tick, at: performance.now(), rivals: new Map(snapshot.rivals.map((r) => [r.id, r])) });
+    const bolts = new Map<number, { x: number; y: number }>();
+    for (let i = 0; i + 2 < snapshot.bolts.length; i += 3) bolts.set(snapshot.bolts[i]!, { x: snapshot.bolts[i + 1]!, y: snapshot.bolts[i + 2]! });
+    this.frames.push({
+      tick: snapshot.tick,
+      at: performance.now(),
+      rivals: new Map(snapshot.rivals.map((r) => [r.id, r])),
+      foes: new Map(snapshot.foes.map((f) => [f.i, f])),
+      bolts,
+    });
     if (this.frames.length > 12) this.frames.shift();
     this.prints = [];
     for (let i = 0; i + 3 < snapshot.prints.length; i += 4) {
@@ -214,9 +225,10 @@ export class NetDriver implements RaceDriver {
     };
   }
 
-  rivals(): Rival[] {
+  /** The two snapshots to draw between (drawn a few ticks in the past, so there are always two) and how far between. */
+  private blend(): { older: RivalFrame; newer: RivalFrame; t: number } | null {
     const latest = this.frames[this.frames.length - 1];
-    if (!latest) return [];
+    if (!latest) return null;
     const rate = this.state.config.tickRate;
     const renderTick = latest.tick + ((performance.now() - latest.at) * rate) / 1000 - INTERPOLATION_TICKS;
     let older = this.frames[0]!;
@@ -234,6 +246,41 @@ export class NetDriver implements RaceDriver {
     }
     const span = newer.tick - older.tick;
     const t = span > 0 ? Math.max(0, Math.min(1, (renderTick - older.tick) / span)) : 1;
+    return { older, newer, t };
+  }
+
+  foes(): FoeSprite[] {
+    const frame = this.blend();
+    if (!frame) return [];
+    const { older, newer, t } = frame;
+    const out: FoeSprite[] = [];
+    for (const [index, to] of newer.foes) {
+      const from = older.foes.get(index) ?? to;
+      out.push({
+        index,
+        x: from.x + (to.x - from.x) * t,
+        y: from.y + (to.y - from.y) * t,
+        angle: from.a + wrapAngle(to.a - from.a) * t,
+        mode: to.m,
+      });
+    }
+    return out;
+  }
+
+  bolts() {
+    const frame = this.blend();
+    if (!frame) return [];
+    const { older, newer, t } = frame;
+    return [...newer.bolts].map(([id, to]) => {
+      const from = older.bolts.get(id) ?? to;
+      return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+    });
+  }
+
+  rivals(): Rival[] {
+    const frame = this.blend();
+    if (!frame) return [];
+    const { older, newer, t } = frame;
     const out: Rival[] = [];
     for (const [id, to] of newer.rivals) {
       const from = older.rivals.get(id) ?? to;

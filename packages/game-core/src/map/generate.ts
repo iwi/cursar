@@ -1,19 +1,22 @@
 import { Rng } from '../rng';
-import { type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
+import { ENEMY_KINDS, type EnemySpawn, type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
 export type MapSize = 'small' | 'medium' | 'large';
 
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
-export const MAP_SIZES: Record<MapSize, { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; label: string }> = {
-  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, label: 'Small' },
-  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, label: 'Medium' },
-  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, label: 'Large' },
+export const MAP_SIZES: Record<
+  MapSize,
+  { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; enemies: number; label: string }
+> = {
+  small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, enemies: 3, label: 'Small' },
+  medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, enemies: 4, label: 'Medium' },
+  large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, enemies: 5, label: 'Large' },
 };
 
 /** Bumped whenever the generator changes, so saved ghosts never play on a different layout. */
-const GENERATOR_VERSION = 6;
+const GENERATOR_VERSION = 7;
 
 export interface GenerateOptions {
   seed: string;
@@ -28,6 +31,8 @@ export interface GenerateOptions {
   obstacles?: number;
   /** Number of traps (defaults to the size's own count). */
   traps?: number;
+  /** Number of enemies (defaults to the size's own count). */
+  enemies?: number;
 }
 
 const PITCH = 3;
@@ -352,6 +357,53 @@ export function generateMap(options: GenerateOptions): GameMap {
   }
   base.traps = traps;
 
+  // 9. Enemies, taking turns by kind, in plain cells away from the start and
+  //    from everything placed so far:
+  //    - patrollers walk a straight corridor of 3 to 5 cells;
+  //    - chasers sleep in a dead end if there is one free (a lair), else any cell;
+  //    - turrets stand in a cell, watching the corridors round it.
+  const enemyCount = options.enemies ?? MAP_SIZES[size].enemies;
+  const enemyKinds = rng.shuffle([...ENEMY_KINDS]);
+  const enemies: EnemySpawn[] = [];
+  const nearStart = (c: number, r: number) => c >= startC - 1 && c <= startC + 2 && r >= startR - 1 && r <= startR + 2;
+  const openSides = (c: number, r: number) => DIRS.filter((d) => inGrid(c + d.dx, r + d.dy) && isOpenBetween(c, r, d.dx, d.dy)).length;
+  const freeCells = () => {
+    const cells: { c: number; r: number }[] = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (free(c, r) && !nearStart(c, r)) cells.push({ c, r });
+    return cells;
+  };
+  for (let n = 0; n < enemyCount; n++) {
+    const kind = enemyKinds[n % enemyKinds.length]!;
+    if (kind === 'patroller') {
+      const beats: { c: number; r: number; dx: number; dy: number; len: number }[] = [];
+      for (const { c, r } of freeCells()) {
+        for (const d of [DIRS[0]!, DIRS[2]!]) {
+          let len = 1;
+          while (len < 5 && free(c + d.dx * len, r + d.dy * len) && !nearStart(c + d.dx * len, r + d.dy * len) && isOpenBetween(c + d.dx * (len - 1), r + d.dy * (len - 1), d.dx, d.dy)) len++;
+          if (len >= 3) beats.push({ c, r, dx: d.dx, dy: d.dy, len });
+        }
+      }
+      if (beats.length > 0) {
+        const run = rng.pick(beats);
+        const a = centre(run.c, run.r);
+        const b = centre(run.c + run.dx * (run.len - 1), run.r + run.dy * (run.len - 1));
+        enemies.push({ kind: 'patroller', ax: a.x, ay: a.y, bx: b.x, by: b.y, phase: rng.next() });
+        reserve(Math.min(run.c, run.c + run.dx * (run.len - 1)) - 1, Math.min(run.r, run.r + run.dy * (run.len - 1)) - 1,
+          Math.max(run.c, run.c + run.dx * (run.len - 1)) + 1, Math.max(run.r, run.r + run.dy * (run.len - 1)) + 1);
+        continue;
+      }
+    }
+    const cells = freeCells();
+    if (cells.length === 0) break;
+    const lairs = cells.filter(({ c, r }) => openSides(c, r) === 1);
+    const { c, r } = rng.pick(kind === 'chaser' && lairs.length > 0 ? lairs : cells);
+    const at = centre(c, r);
+    // A patroller with no straight corridor free becomes a chaser instead.
+    enemies.push(kind === 'turret' ? { kind: 'turret', x: at.x, y: at.y } : { kind: 'chaser', x: at.x, y: at.y });
+    reserve(c - 1, r - 1, c + 1, r + 1);
+  }
+  base.enemies = enemies;
+
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);
   return base;
@@ -392,5 +444,8 @@ export function flipMap(map: GameMap, flipX: boolean, flipY: boolean): GameMap {
       return { ...o, ...rect(o) };
     }),
     traps: map.traps?.map((t) => ({ ...t, x: flipX ? width - 1 - t.x : t.x, y: flipY ? height - 1 - t.y : t.y })),
+    enemies: map.enemies?.map((e): EnemySpawn =>
+      e.kind === 'patroller' ? { ...e, ax: px(e.ax), ay: py(e.ay), bx: px(e.bx), by: py(e.by) } : { ...e, x: px(e.x), y: py(e.y) },
+    ),
   };
 }

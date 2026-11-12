@@ -16,12 +16,14 @@ import {
   type RoomInfo,
   type RoomStage,
   SNAPSHOT_EVERY_TICKS,
+  type FoeView,
   type RivalView,
   type SelfState,
   type ServerMessage,
   cloneConfig,
   computeVisibility,
   effectiveVision,
+  hearFoe,
   createAutopilot,
   createRace,
   generateMap,
@@ -448,9 +450,15 @@ export class Room {
       if (event.type === 'phase' || event.type === 'countdown' || event.type === 'resumed' || event.type === 'finish') {
         for (const m of race.racers) if (m.send) m.events.push(event);
         urgent = true;
+      } else if (event.type === 'foeCue') {
+        // Each runner nearby hears it: a direction and loudness, never a position.
+        state.players.forEach((listener, i) => {
+          const heard = !listener.finished && race.racers[i]!.send ? hearFoe(state, event, listener) : null;
+          if (heard) race.racers[i]!.events.push(heard);
+        });
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
-      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit' || event.type === 'trap') {
+      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit' || event.type === 'trap' || event.type === 'enemyHit') {
         // Effects and damage come from the server (hazards, traps), so the runner's page cannot predict them.
         const index = state.players.findIndex((p) => p.id === event.playerId);
         const member = race.racers[index];
@@ -523,6 +531,20 @@ export class Room {
         if (left > 0 && inView(trap.x + 0.5, trap.y + 0.5)) traps.push(index, round(left, 10));
       });
 
+      // Chasers and turrets inside this runner's view, and bolts.
+      const foes: FoeView[] = [];
+      state.foes.forEach((foe, index) => {
+        const spawn = map.enemies?.[index];
+        if (!foe || !spawn || spawn.kind === 'patroller') return;
+        if (foe.kind === 'chaser') {
+          if (inView(foe.x, foe.y)) foes.push({ i: index, x: round(foe.x, 100), y: round(foe.y, 100), a: round(foe.facing, 100), m: foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
+        } else if (inView(spawn.x, spawn.y)) {
+          foes.push({ i: index, x: spawn.x, y: spawn.y, a: round(foe.aim, 100), m: foe.charge >= 0 ? 1 : 0 });
+        }
+      });
+      const bolts: number[] = [];
+      for (const b of state.bolts) if (inView(b.x, b.y)) bolts.push(b.id, round(b.x, 100), round(b.y, 100));
+
       member.send({
         t: 'snap',
         tick: state.tick,
@@ -535,6 +557,8 @@ export class Room {
         rivals,
         prints,
         traps,
+        foes,
+        bolts,
         readyCount,
         paused: this.paused,
         events: member.events,

@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { GameMap, ObstacleKind, Point, TrapKind } from '../map/types';
+import type { EnemyKind, GameMap, ObstacleKind, Point, TrapKind } from '../map/types';
 
 /** One tick of player intent. `seq` lets a server acknowledge inputs for client prediction. */
 export interface PlayerInput {
@@ -73,6 +73,47 @@ export interface PlayerState {
   finishTime: number | null;
 }
 
+export type ChaserMode = 'sleep' | 'chase' | 'return';
+
+export interface ChaserState {
+  kind: 'chaser';
+  x: number;
+  y: number;
+  facing: number;
+  mode: ChaserMode;
+  /** The runner being chased. */
+  target: string | null;
+  /** Where the target was last seen. */
+  lastX: number;
+  lastY: number;
+  /** Chasing: seconds left after losing sight. Returning or asleep: seconds left of rest before it may wake again. */
+  timer: number;
+  cue: number;
+}
+
+export interface TurretState {
+  kind: 'turret';
+  aim: number;
+  target: string | null;
+  /** Seconds left of the whir before firing, or -1 when not charging. */
+  charge: number;
+  reload: number;
+}
+
+export type FoeState = ChaserState | TurretState;
+
+export interface Bolt {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+}
+
+/** Enemy sounds. */
+export type FoeSound = 'snore' | 'wake' | 'growl' | 'whir' | 'fire';
+
 export type RacePhase = 'preview' | 'countdown' | 'racing' | 'finished';
 
 export interface RaceState {
@@ -91,6 +132,11 @@ export interface RaceState {
   resumeTime: number;
   /** Per map trap: the race time at which it is armed again (0 or past = armed). */
   traps: number[];
+  /** Per map enemy: its state, or null for a patroller (whose motion follows the clock). */
+  foes: (FoeState | null)[];
+  /** Turret bolts in flight. */
+  bolts: Bolt[];
+  nextBoltId: number;
   players: PlayerState[];
 }
 
@@ -116,6 +162,12 @@ export type GameEvent =
   | { type: 'obstacleHit'; playerId: string; kind: ObstacleKind }
   /** The runner sprang a trap (its effect follows as its own events). */
   | { type: 'trap'; playerId: string; index: number; kind: TrapKind }
+  /** An enemy caught the runner, or a turret bolt hit them (the cost follows as its own events). */
+  | { type: 'enemyHit'; playerId: string; kind: EnemyKind }
+  /** An enemy made a sound (the map enemy index). Pages turn this into `foeHeard` for the listener. */
+  | { type: 'foeCue'; index: number; sound: FoeSound }
+  /** An enemy sound as one listener hears it: a direction and loudness, never a position. `aimed`: it is after you. */
+  | { type: 'foeHeard'; sound: FoeSound; pan: number; closeness: number; aimed: boolean }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */

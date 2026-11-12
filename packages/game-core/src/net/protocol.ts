@@ -3,7 +3,7 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -92,6 +92,18 @@ export interface RivalView {
   safe?: true;
 }
 
+/** A chaser or turret inside your view (patrollers follow the clock, so pages work them out). */
+export interface FoeView {
+  /** Index in the map's enemy list. */
+  i: number;
+  x: number;
+  y: number;
+  /** Facing (chaser) or aim (turret), radians. */
+  a: number;
+  /** Chaser: 0 asleep, 1 chasing, 2 going home. Turret: 0 idle, 1 whirring. */
+  m: number;
+}
+
 export interface ResultRow {
   id: string;
   name: string;
@@ -161,6 +173,10 @@ export type ServerMessage =
       prints: number[];
       /** Sprung traps inside your view: flat map trap index, seconds until armed again. */
       traps: number[];
+      /** Chasers and turrets inside your view. */
+      foes: FoeView[];
+      /** Turret bolts inside your view: flat id, x, y. */
+      bolts: number[];
       readyCount: number;
       /** The host has frozen the race. */
       paused: boolean;

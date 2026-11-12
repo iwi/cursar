@@ -87,6 +87,38 @@ export interface GameConfig {
     /** Reversed or confused controls from a trick tile. */
     trickSeconds: number;
   };
+  /** Enemies. Where they live comes from the map. */
+  enemies: {
+    /** Touching one costs a heart and shoves you. */
+    patroller: { radius: number; speed: number };
+    chaser: {
+      radius: number;
+      speed: number;
+      /** Wakes when a runner it can see comes this close. */
+      wakeRange: number;
+      /** Keeps chasing while it can see its runner within this distance. */
+      sightRange: number;
+      /** After losing sight, carries on to where it last saw them for this long, then goes home. */
+      giveUpSeconds: number;
+      /** After catching someone, ignores runners for this long. */
+      restSeconds: number;
+      /** Catching costs a heart and this much stun. */
+      stunSeconds: number;
+    };
+    turret: {
+      range: number;
+      turnRate: number;
+      /** The whir before it fires. */
+      chargeSeconds: number;
+      reloadSeconds: number;
+      boltSpeed: number;
+      boltRadius: number;
+      /** A bolt slows you for this long (no heart lost). */
+      slowSeconds: number;
+    };
+    /** Enemy sounds carry this far (tiles). */
+    hearingRange: number;
+  };
   health: {
     /** Hearts a runner starts with, and gets back at each new checkpoint. */
     hearts: number;
@@ -155,6 +187,12 @@ export const DEFAULT_CONFIG: GameConfig = {
     glueSlowSeconds: 4,
     flashBlindSeconds: 5,
     trickSeconds: 1,
+  },
+  enemies: {
+    patroller: { radius: 0.35, speed: 2 },
+    chaser: { radius: 0.4, speed: 4.4, wakeRange: 5, sightRange: 10, giveUpSeconds: 2, restSeconds: 3, stunSeconds: 0.8 },
+    turret: { range: 9, turnRate: 2.5, chargeSeconds: 0.8, reloadSeconds: 2.5, boltSpeed: 6, boltRadius: 0.2, slowSeconds: 3 },
+    hearingRange: 12,
   },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {

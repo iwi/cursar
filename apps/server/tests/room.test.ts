@@ -582,3 +582,31 @@ describe('traps in a network race', () => {
     expect(ana!.last('snap').traps).toEqual([]);
   });
 });
+
+describe('enemies in a network race', () => {
+  it('shows chasers only to runners who can see them, and lets others hear them by direction only', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const state = room.raceState!;
+    const pa = state.players[0]!;
+    const pb = state.players[1]!;
+    // A chaser right beside Ana; Ben far off.
+    state.map.enemies = [{ kind: 'chaser', x: pa.x, y: pa.y }];
+    state.foes = [{ kind: 'chaser', x: pa.x, y: pa.y, facing: 0, mode: 'chase', target: pa.id, lastX: pa.x, lastY: pa.y, timer: 2, cue: 0 }];
+    // Ben on open floor at least 25 tiles away.
+    const far = state.map.tiles.findIndex((_t, i) => {
+      const x = (i % state.map.width) + 0.5;
+      const y = Math.floor(i / state.map.width) + 0.5;
+      return !isSolid(state.map, Math.floor(x), Math.floor(y)) && Math.hypot(x - pa.x, y - pa.y) > 25;
+    });
+    pb.x = (far % state.map.width) + 0.5;
+    pb.y = Math.floor(far / state.map.width) + 0.5;
+    ticks(room, 3);
+    expect(ana!.last('snap').foes.map((f) => f.i)).toEqual([0]);
+    expect(ben!.last('snap').foes).toEqual([]);
+    const heard = ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).filter((e) => e.type === 'foeHeard');
+    expect(heard.length).toBeGreaterThan(0);
+    for (const e of heard) expect(Object.keys(e).sort()).toEqual(['aimed', 'closeness', 'pan', 'sound', 'type']);
+    expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).some((e) => e.type === 'foeCue')).toBe(false);
+  });
+});

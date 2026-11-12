@@ -69,6 +69,18 @@ export interface Trap {
   y: number;
 }
 
+/** Enemies. How they behave is set in `config.enemies`; the map says where they live. */
+export const ENEMY_KINDS = ['patroller', 'chaser', 'turret'] as const;
+export type EnemyKind = (typeof ENEMY_KINDS)[number];
+
+export type EnemySpawn =
+  /** Walks back and forth between two points along a corridor, on a schedule (like a boulder). */
+  | { kind: 'patroller'; ax: number; ay: number; bx: number; by: number; phase: number }
+  /** Sleeps at its home until a runner comes near, then chases. */
+  | { kind: 'chaser'; x: number; y: number }
+  /** Fixed in place; turns to face a runner in sight and fires bolts. */
+  | { kind: 'turret'; x: number; y: number };
+
 /** Versioned map format shared by the generator, the game and (later) the editor. */
 export interface GameMap {
   schema: 1;
@@ -91,6 +103,8 @@ export interface GameMap {
   obstacles?: Obstacle[];
   /** Hidden traps. Optional, like obstacles. */
   traps?: Trap[];
+  /** Enemies. Optional, like obstacles. */
+  enemies?: EnemySpawn[];
   /** Present when the map came from the generator. */
   generator?: { seed: string; size: string };
 }

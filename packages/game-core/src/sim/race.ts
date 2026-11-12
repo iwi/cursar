@@ -4,6 +4,7 @@ import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
 import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstacles';
 import { springTraps } from './traps';
+import { createFoes, hitPatrollers, stepEnemies } from './enemies';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
 export interface PlayerSetup {
@@ -36,6 +37,9 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
     deadline: config.race.timeLimitSeconds,
     resumeTime: 0,
     traps: (map.traps ?? []).map(() => 0),
+    foes: createFoes(map),
+    bolts: [],
+    nextBoltId: 1,
     players: players.map((setup, i): PlayerState => {
       const start = map.startPositions[setup.slot ?? i];
       if (!start) throw new Error(`No start position for slot ${setup.slot ?? i}.`);
@@ -167,6 +171,7 @@ export function step(state: RaceState, inputs: Record<string, PlayerInput>): Gam
     p.lastInputSeq = input.seq;
     stepPlayer(state, p, input, dt, events);
   }
+  stepEnemies(state, dt, events);
 
   if (state.players.every((p) => p.finished) || state.raceTime >= state.deadline) {
     state.phase = 'finished';
@@ -223,6 +228,7 @@ export function stepPlayer(
   p.hitGuard = Math.max(0, p.hitGuard - dt);
   hitObstacles(state, p, events);
   springTraps(state, p, events);
+  hitPatrollers(state, p, events);
 
   p.bumpCooldown = Math.max(0, p.bumpCooldown - dt);
   if (impact > 2.5 && p.bumpCooldown === 0) {

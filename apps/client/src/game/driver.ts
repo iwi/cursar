@@ -9,6 +9,7 @@ import {
   applyEffect,
   createRace,
   damage,
+  hearFoe,
   placeMarker,
   removeLastMarker,
   resumeRace,
@@ -34,6 +35,18 @@ export interface Rival {
   fx: readonly EffectKind[];
   /** In the safe time after a respawn. */
   safe: boolean;
+}
+
+/** A chaser or turret to draw (patrollers follow the clock, so the scene works them out). */
+export interface FoeSprite {
+  /** Index in the map's enemy list. */
+  index: number;
+  x: number;
+  y: number;
+  /** Facing (chaser) or aim (turret). */
+  angle: number;
+  /** Chaser: 0 asleep, 1 chasing, 2 going home. Turret: 0 idle, 1 whirring. */
+  mode: number;
 }
 
 export interface Print {
@@ -73,6 +86,10 @@ export interface RaceDriver {
   position(): { x: number; y: number };
   rivals(): Rival[];
   rivalPrints(): readonly Print[];
+  /** Chasers and turrets known to this page (in network play, only those in view). */
+  foes(): FoeSprite[];
+  /** Turret bolts in flight. */
+  bolts(): { x: number; y: number }[];
   ghost(): { x: number; y: number; facing: number } | null;
   /** Routes to reveal once the race is over, or null until they are known. */
   routes(): Track[] | null;
@@ -146,6 +163,12 @@ export class LocalDriver implements RaceDriver {
       this.prevY = this.me.y;
       const input = { seq: ++this.seq, ...readIntent() };
       for (const event of step(state, { [LOCAL_ID]: input })) {
+        if (event.type === 'foeCue') {
+          // Heard as the runner hears it, like in network play.
+          const heard = hearFoe(state, event, this.me);
+          if (heard) events.push(heard);
+          continue;
+        }
         events.push(event);
         if (event.type === 'phase' && event.phase === 'finished') {
           this.onResult({ finished: this.me.finished, time: this.me.finishTime, recording: this.recorder.finish() });
@@ -167,6 +190,21 @@ export class LocalDriver implements RaceDriver {
 
   rivalPrints(): readonly Print[] {
     return [];
+  }
+
+  foes(): FoeSprite[] {
+    const out: FoeSprite[] = [];
+    this.state.foes.forEach((foe, index) => {
+      const spawn = this.state.map.enemies?.[index];
+      if (!foe || !spawn || spawn.kind === 'patroller') return;
+      if (foe.kind === 'chaser') out.push({ index, x: foe.x, y: foe.y, angle: foe.facing, mode: foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
+      else out.push({ index, x: spawn.x, y: spawn.y, angle: foe.aim, mode: foe.charge >= 0 ? 1 : 0 });
+    });
+    return out;
+  }
+
+  bolts() {
+    return this.state.bolts.map((b) => ({ x: b.x, y: b.y }));
   }
 
   ghost() {

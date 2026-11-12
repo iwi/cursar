@@ -1,4 +1,4 @@
-import type { EffectKind, TrapKind } from '@cursar/game-core';
+import type { EffectKind, EnemyKind, TrapKind } from '@cursar/game-core';
 
 /** How each effect is named and coloured, shared by the race drawing and the HUD. */
 export const EFFECT_STYLE: Record<EffectKind, { label: string; color: number }> = {
@@ -22,4 +22,11 @@ export const TRAP_STYLE: Record<TrapKind, { label: string; color: number }> = {
   flash: { label: 'Flash', color: 0xfff3a0 },
   reverse: { label: 'Trick tile', color: 0xff5a5f },
   confuse: { label: 'Trick tile', color: 0xc77dff },
+};
+
+/** How each enemy is named (for the notice when one gets you). */
+export const ENEMY_LABEL: Record<EnemyKind, string> = {
+  patroller: 'Patroller',
+  chaser: 'Caught by a chaser',
+  turret: 'Turret bolt',
 };
