@@ -1,6 +1,6 @@
 # Cursar – Design Decisions (addendum to the v0.1 documents)
 
-Date: 10 November 2026, updated 11 November 2026 after the play tests and the multiplayer build, and 12 November 2026 with answers to the open questions
+Date: 10 November 2026, updated 11 November 2026 after the play tests and the multiplayer build, and 12 November 2026 with answers to the open questions and the internet-play build
 
 This records what was agreed in the design review and where it changes the Game Design Document (GDD), the Technical Architecture and the Roadmap. Where this file and the v0.1 documents disagree, this file wins.
 
@@ -114,7 +114,9 @@ Agreed for later phases:
 | Client prediction | Your own runner moves at once using the shared rules; each server update is applied and the inputs it has not yet processed are replayed. Small corrections are eased out rather than snapped. Rivals are drawn 100 ms in the past, blended between updates (20 per second). | Built |
 | Visibility | Computed in the core and used by the server: during a race each player is sent only the rivals and footprints inside their own view, so a modified page cannot reveal where the others are. The static layout is not hidden, since it is shown in the preview. | Built |
 | Server authority | The server runs the race. Pages send only movement intent; messages are validated, size-limited and rate-limited, and a page sending inputs faster than the simulation gains nothing. | Built |
-| Rooms | One room per server, up to 8 players, one race at a time. The first player is host; the host role passes on if they leave. | Built |
+| Rooms | Many rooms per server, each up to 8 players and one race at a time, joined by a four-letter code (consonants only, so codes never spell words) or a link with the code in it. Creating a room makes you its host. If the host drops, the role passes to someone connected and comes back when they return. A room closes once nobody has been in it for 30 seconds. The server holds at most 50 rooms (setting: `MAX_ROOMS`). (Changed 12 November; it was one room per server.) | Built |
+| Removing players | The host can remove a person from the lobby, from the results, or while they wait for the next race, but not mid-race (they would leave a hole in it). The removed page is told why and cannot rejoin that room from the same tab. Without accounts this is a deterrent, not a ban: a new tab joins as someone new. | Built |
+| Abuse limits | A connection gets one try at joining, so room codes cannot be guessed in a loop. Per visitor address: at most 30 new connections a minute and 12 open at once. Existing limits on message size and rate still apply. | Built |
 | Stalled pages | If a page stops sending moves for a quarter of a second (a background tab, a frozen page), the server stops that runner rather than repeating its last move. This is also why the earlier demo tab kept running into walls. | Built |
 | Reconnection | A dropped or reloaded page gets its place back (including mid-race) for 30 seconds. | Built |
 | Deployment | `npm start` serves the page and the connection from one port, so local, network and later internet play differ only in the address. | Built |
@@ -122,14 +124,14 @@ Agreed for later phases:
 | Storage | Browser storage for settings and best runs. SQLite waits until profiles and statistics. | Built |
 | Events | The simulation reports what happened (footstep, bump, finish and so on) as events. Audio and effects listen to them. | Built |
 | Effect system | To be built first in Phase 3, before terrain hazards and traps. | Agreed |
-| Internet play | A single hosted server with room codes and no accounts, next. Needs HTTPS and several rooms; the game code is already independent of where it runs. The host will be able to remove a human player from the room in this version. Accounts and matchmaking stay late. | Agreed |
+| Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. | Built (going online on Railway) |
 | Phaser version | Phaser 3.90, the final and most widely documented release of version 3. Version 4 exists; because rendering is kept separate from the game rules, moving later affects only `apps/client/src/game`. | Built |
 
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
 2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
-3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player.
+3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Code done 12 November; host chosen: Railway. Still to do: create the Railway service and check a real game over the internet.*
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio.
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level.
 6. **Phase 5: map editor.** Using the same map format the generator already produces.
@@ -140,4 +142,4 @@ Agreed for later phases:
 
 - Computer players' speeds are first guesses set against your times (a flawless run at full speed is about 80 s on a small map).
 
-Settled on 12 November: multiplayer works across real computers on a network; memory time (25 s) and vision ranges stay as they are (the Tuning panel in solo mode still changes them live).
+Settled on 12 November: multiplayer works across real computers on a network; memory time (25 s) and vision ranges stay as they are; the server is hosted on Railway (the Tuning panel in solo mode still changes them live).

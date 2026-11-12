@@ -1,6 +1,6 @@
 # Cursar – notes for Claude Code
 
-Cursar is a top-down racing game about navigation and memory: players see the whole map in a preview, then race with a restricted, direction-based view, touching every checkpoint (any order) before the finish. Solo mode races a ghost of your best run; multiplayer is 2–8 players on a local network, with server-run computer players.
+Cursar is a top-down racing game about navigation and memory: players see the whole map in a preview, then race with a restricted, direction-based view, touching every checkpoint (any order) before the finish. Solo mode races a ghost of your best run; multiplayer is 2–8 players per room (rooms joined by a four-letter code, many rooms per server), with server-run computer players.
 
 Read `docs/DECISIONS.md` before changing gameplay: it records what was agreed with the project owner and why (race length tuning, checkpoint rule, audio cues, multiplayer rules). It overrides the original v0.1 design documents. Update it when a decision changes.
 
@@ -18,7 +18,7 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 
 - `packages/game-core/` – the game rules in plain TypeScript. No browser, Phaser, DOM or network code here, ever.
   - `config.ts` every tunable number; `map/` format, seeded generator, validation, route planning; `sim/` movement, collision, stamina, visibility, race phases, autopilot; `replay/` ghosts; `net/protocol.ts` client/server messages and their validation.
-- `apps/server/` – Node game server. `room.ts` is transport-free (lobby, race loop, per-player visibility filtering, results, series points, computer players, pause/restart/cancel); `index.ts` wires it to WebSockets and serves `apps/client/dist`.
+- `apps/server/` – Node game server. `rooms.ts` holds every room by code (create, join, close when abandoned); `room.ts` is one room (lobby, race loop, per-player visibility filtering, results, series points, computer players, pause/restart/cancel, removing players). Both are transport-free; `index.ts` wires them to WebSockets, applies per-address connection limits and serves `apps/client/dist` plus `/health`. Hosting: Railway, via `Dockerfile` and `railway.json`; see `docs/DEPLOY.md`.
 - `apps/client/` – Vite + React (menus, HUD) + Phaser 3.90 (race rendering).
   - `game/RaceScene.ts` draws and plays sound; it gets everything from a `RaceDriver` (`game/driver.ts`): `LocalDriver` (solo, simulation in the browser) or `NetDriver` (multiplayer: client prediction + reconciliation, rivals interpolated 6 ticks behind).
   - `ui/` React screens; `audio/AudioEngine.ts` synthesised Web Audio cues (no audio files).
@@ -36,6 +36,6 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 
 ## Where the project is
 
-Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel). Next on the roadmap: simple internet play (hosted server, room codes, no accounts), then Phase 3 hazards starting with the effect system. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
+Done: Phases 0–2 (solo prototype, seeded maps, checkpoints, ghosts, audio, local-network multiplayer, computer players, host pause/restart/cancel) and the code for Phase 2b (rooms with codes, removing players, ready to host behind HTTPS). Still open for 2b: putting it online on Railway (chosen host) and checking a real game over the internet. Next: Phase 3 hazards starting with the effect system. The skill-pick design (one-key pick of three at checkpoints) is agreed but not built.
 
 The owner writes in British English; keep user-facing text in British English.

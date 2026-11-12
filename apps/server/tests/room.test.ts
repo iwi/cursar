@@ -8,13 +8,14 @@ type Of<T extends ServerMessage['t']> = Extract<ServerMessage, { t: T }>;
 class Client {
   inbox: ServerMessage[] = [];
   member: Member | null;
+  closed = false;
   constructor(
     private room: Room,
     name: string,
     token?: string,
     color = PLAYER_COLORS[0]!,
   ) {
-    this.member = room.join((m) => this.inbox.push(JSON.parse(JSON.stringify(m)) as ServerMessage), { t: 'hello', v: PROTOCOL_VERSION, name, color, token });
+    this.member = room.join((m) => this.inbox.push(JSON.parse(JSON.stringify(m)) as ServerMessage), { t: 'hello', v: PROTOCOL_VERSION, name, color, token }, () => (this.closed = true));
   }
   send(message: ClientMessage) {
     this.room.receive(this.member!, message);
@@ -72,6 +73,7 @@ describe('lobby', () => {
     expect(room.players.map((p) => p.name)).toEqual(['Ana', 'Ben', 'Cy']);
     expect(new Set(room.players.map((p) => p.color)).size).toBe(3);
     expect(clients[0]!.last('welcome').addresses).toEqual(['192.168.1.20']);
+    expect(clients[0]!.last('welcome').room).toBe('');
   });
 
   it('lets only the host change settings and start', () => {
@@ -100,6 +102,15 @@ describe('lobby', () => {
     expect(clients[1]!.last('room').room.hostId).toBe(clients[1]!.id);
   });
 
+  it('gives the host role back to a host who reconnects', () => {
+    const { clients, room } = setup(['Ana', 'Ben']);
+    const [ana, ben] = clients as [Client, Client];
+    room.leave(ana.member!);
+    expect(ben.last('room').room.hostId).toBe(ben.id);
+    const back = new Client(room, 'Ana', ana.last('welcome').token);
+    expect(back.last('room').room.hostId).toBe(ana.id);
+  });
+
   it('lets a player change name and colour, but not to a taken colour', () => {
     const { clients } = setup();
     const benColor = clients[1]!.last('room').room.players[1]!.color;
@@ -120,6 +131,9 @@ describe('messages', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'hello', v: 1, color: 1, name: '  <b>Zed</b>   the\tvery very long name ' }))).toMatchObject({ name: 'bZed/b the very' });
     expect(parseClientMessage(JSON.stringify({ t: 'settings', settings: { size: 'huge', races: 400, seed: 'ok seed!' } }))).toEqual({ t: 'settings', settings: { races: 9, seed: 'ok seed' } });
     expect(parseClientMessage('x'.repeat(3000))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ t: 'hello', v: 1, color: 1, name: 'A', room: ' bcdf ' }))).toMatchObject({ room: 'BCDF' });
+    expect(parseClientMessage(JSON.stringify({ t: 'hello', v: 1, color: 1, name: 'A', room: 'ABCD' }))).toMatchObject({ room: '' });
+    expect(parseClientMessage(JSON.stringify({ t: 'hello', v: 1, color: 1, name: 'A' }))).toMatchObject({ room: undefined });
   });
 });
 
@@ -316,7 +330,7 @@ describe('race', () => {
     const bots = room.info().players.filter((p) => p.bot);
     expect(bots.map((p) => p.bot)).toEqual(['hard', 'easy']);
     expect(new Set(room.info().players.map((p) => p.color)).size).toBe(4);
-    ana.send({ t: 'removeBot', id: bots[1]!.id });
+    ana.send({ t: 'remove', id: bots[1]!.id });
     expect(room.info().players).toHaveLength(3);
 
     ana.send({ t: 'start' });
@@ -337,12 +351,17 @@ describe('race', () => {
   });
 
   it('does not keep the room alive for computer players alone', () => {
-    const { clients, room } = setup(['Ana']);
+    const { clients, room, clock } = setup(['Ana']);
     clients[0]!.send({ t: 'addBot', level: 'normal' });
     ticks(room, 120);
     expect(room.info().players).toHaveLength(2);
+    expect(room.abandoned).toBe(false);
     room.leave(clients[0]!.member!);
+    expect(room.abandoned).toBe(false);
+    clock.now = 31_000;
+    ticks(room, 60);
     expect(room.info().players).toEqual([]);
+    expect(room.abandoned).toBe(true);
   });
 
   it('lets only the host pause, freezes the race for everyone, and counts 3-2-1 before play continues', () => {
@@ -418,6 +437,57 @@ describe('race', () => {
     expect(clients[0]!.last('room').room.players.map((p) => p.name)).toEqual(['Ana', 'Ben']);
     room.leave(clients[0]!.member!);
     room.leave(clients[1]!.member!);
+    // Places are kept for a while even with nobody connected, then the room empties.
+    expect(room.info().players).toHaveLength(2);
+    clock.now = 62_000;
+    ticks(room, 60);
     expect(room.info().players).toEqual([]);
+    expect(room.abandoned).toBe(true);
+  });
+
+  it('gives a lone host who reloads the room back, with its settings and players', () => {
+    const { clients, room } = setup(['Ana']);
+    const ana = clients[0]!;
+    ana.send({ t: 'settings', settings: { size: 'large', races: 5 } });
+    ana.send({ t: 'addBot', level: 'easy' });
+    room.leave(ana.member!);
+    ticks(room, 120);
+    const back = new Client(room, 'Ana', ana.last('welcome').token);
+    expect(back.id).toBe(ana.id);
+    const info = back.last('room').room;
+    expect(info.hostId).toBe(ana.id);
+    expect(info.settings).toMatchObject({ size: 'large', races: 5 });
+    expect(info.players).toHaveLength(2);
+  });
+
+  it('lets the host remove a person, who is told, disconnected and cannot rejoin from that page', () => {
+    const { clients, room } = setup(['Ana', 'Ben', 'Cy']);
+    const [ana, ben, cy] = clients as [Client, Client, Client];
+    ben.send({ t: 'remove', id: cy.id });
+    ana.send({ t: 'remove', id: ana.id });
+    expect(room.info().players).toHaveLength(3);
+
+    ana.send({ t: 'remove', id: cy.id });
+    expect(cy.last('error').message).toMatch(/removed/);
+    expect(cy.closed).toBe(true);
+    expect(ana.last('room').room.players.map((p) => p.name)).toEqual(['Ana', 'Ben']);
+    // A message still in flight from the removed page changes nothing.
+    cy.send({ t: 'profile', name: 'Sneaky', color: PLAYER_COLORS[3]! });
+    room.leave(cy.member!);
+    expect(room.info().players.map((p) => p.name)).toEqual(['Ana', 'Ben']);
+
+    const again = new Client(room, 'Cy', cy.last('welcome').token);
+    expect(again.member).toBeNull();
+    expect(again.last('error').message).toMatch(/removed/);
+  });
+
+  it('does not let the host remove someone running in the race, only someone waiting for the next', () => {
+    const { clients, room } = startRacing(['Ana', 'Ben']);
+    const late = new Client(room, 'Late');
+    clients[0]!.send({ t: 'remove', id: clients[1]!.id });
+    expect(room.info().players).toHaveLength(3);
+    clients[0]!.send({ t: 'remove', id: late.id });
+    expect(late.closed).toBe(true);
+    expect(room.info().players.map((p) => p.name)).toEqual(['Ana', 'Ben']);
   });
 });

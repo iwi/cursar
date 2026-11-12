@@ -6,8 +6,10 @@ import {
   MAX_PLAYERS,
   type MapSize,
   PLAYER_COLORS,
+  ROOM_CODE_LENGTH,
   type RoomInfo,
   type ServerMessage,
+  cleanRoomCode,
 } from '@cursar/game-core';
 import { useEffect, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
@@ -25,9 +27,88 @@ interface Props {
   onExit: () => void;
 }
 
-/** Network play: connects to the game server, then shows the lobby or the race. */
-export function Multiplayer({ settings, onChange, onExit }: Props) {
-  const [connection] = useState(() => new Connection({ name: settings.name, color: settings.color }));
+/** The room code in the page address (`?room=BCDF`), if any. */
+export function roomFromAddress(): string {
+  return cleanRoomCode(new URLSearchParams(window.location.search).get('room'));
+}
+
+/** Puts the room code in the page address, so the link can be shared and a reload rejoins; '' removes it. */
+function setRoomInAddress(code: string): void {
+  const url = new URL(window.location.href);
+  if (code) url.searchParams.set('room', code);
+  else url.searchParams.delete('room');
+  window.history.replaceState(null, '', url);
+}
+
+/** Network play: create a room or join one by its code, then the lobby and races. */
+export function Multiplayer(props: Props) {
+  // undefined: still choosing; null: create a new room; a code: join that room.
+  const [target, setTarget] = useState<string | null | undefined>(() => roomFromAddress() || undefined);
+  // Someone arriving by a shared link has not clicked anything yet, and browsers only allow sound after a click or key.
+  useEffect(() => {
+    const unlock = () => {
+      audio.unlock();
+      audio.setMuted(props.settings.muted);
+      audio.setVolume(props.settings.volume);
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+  const exit = () => {
+    setRoomInAddress('');
+    props.onExit();
+  };
+  if (target === undefined) return <ChooseRoom onCreate={() => setTarget(null)} onJoin={setTarget} onExit={exit} />;
+  return <Online key={target ?? 'new'} {...props} target={target} onExit={exit} onAnother={() => { setRoomInAddress(''); setTarget(undefined); }} />;
+}
+
+function ChooseRoom({ onCreate, onJoin, onExit }: { onCreate: () => void; onJoin: (code: string) => void; onExit: () => void }) {
+  const [typed, setTyped] = useState('');
+  const code = cleanRoomCode(typed);
+  return (
+    <main className="menu">
+      <div className="menu-card">
+        <h1>Play with friends</h1>
+        <p className="muted">One of you creates a room and shares its code or link. Everyone else joins with it. Up to {MAX_PLAYERS} players.</p>
+        <button type="button" className="primary" onClick={onCreate}>Create a room</button>
+        <form
+          className="join-code"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (code) onJoin(code);
+          }}
+        >
+          <label className="field grow">
+            <span>Or join with a room code</span>
+            <input
+              value={typed}
+              maxLength={ROOM_CODE_LENGTH + 2}
+              placeholder="e.g. BCDF"
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setTyped(event.target.value.toUpperCase())}
+            />
+          </label>
+          <button type="submit" disabled={!code}>Join</button>
+        </form>
+        <button type="button" onClick={onExit}>Back to menu</button>
+      </div>
+    </main>
+  );
+}
+
+interface OnlineProps extends Props {
+  target: string | null;
+  onAnother: () => void;
+}
+
+function Online({ settings, onChange, onExit, onAnother, target }: OnlineProps) {
+  const [connection] = useState(() => new Connection({ name: settings.name, color: settings.color }, target));
   const [status, setStatus] = useState<ConnectionStatus>(connection.status);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [race, setRace] = useState<RaceStart | null>(null);
@@ -37,6 +118,7 @@ export function Multiplayer({ settings, onChange, onExit }: Props) {
   useEffect(() => {
     const off = [
       connection.onStatus(setStatus),
+      connection.on('welcome', (message) => setRoomInAddress(message.room)),
       connection.on('room', (message) => {
         setRoom(message.room);
         if (message.room.stage === 'lobby') {
@@ -61,13 +143,13 @@ export function Multiplayer({ settings, onChange, onExit }: Props) {
     return (
       <main className="menu">
         <div className="menu-card">
-          <h2>{error ? 'Could not join' : 'No connection to the game server'}</h2>
+          <h2>{error ? (room ? 'No longer in the room' : 'Could not join') : 'No connection to the game server'}</h2>
           <p className="muted">
-            {error ||
-              'The game server is not answering. Check that it is still running on the host computer and that you are on the same network.'}
+            {error || 'The game server is not answering. Check your internet connection, or that the server is still running.'}
           </p>
           <div className="actions left">
             {!error && <button type="button" className="primary" onClick={() => connection.retry()}>Try again</button>}
+            {error && <button type="button" className="primary" onClick={onAnother}>Create or join another room</button>}
             <button type="button" onClick={onExit}>Back to menu</button>
           </div>
         </div>
@@ -78,7 +160,7 @@ export function Multiplayer({ settings, onChange, onExit }: Props) {
   if (!room) {
     return (
       <main className="menu">
-        <div className="menu-card"><p className="muted">Connecting to the game server…</p></div>
+        <div className="menu-card"><p className="muted">{target ? `Joining room ${target}…` : 'Creating a room…'}</p></div>
       </main>
     );
   }
@@ -104,7 +186,8 @@ export function Multiplayer({ settings, onChange, onExit }: Props) {
   return <Lobby room={room} connection={connection} settings={settings} onChange={onChange} onExit={onExit} reconnecting={status === 'connecting'} />;
 }
 
-interface LobbyProps extends Props {
+interface LobbyProps extends Omit<Props, 'onExit'> {
+  onExit: () => void;
   room: RoomInfo;
   connection: Connection;
   reconnecting: boolean;
@@ -134,23 +217,38 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
   };
   const set = (patch: Partial<RoomInfo['settings']>) => connection.send({ t: 'settings', settings: patch });
 
-  // Where other players should point their browsers.
+  // The link other players open. On "localhost" that only works on this computer, so offer the network addresses instead.
   const { hostname, port, protocol } = window.location;
   const local = hostname === 'localhost' || hostname === '127.0.0.1';
-  const links = local ? connection.addresses.map((address) => `${protocol}//${address}${port ? `:${port}` : ''}`) : [window.location.origin];
+  const origins = local ? connection.addresses.map((address) => `${protocol}//${address}${port ? `:${port}` : ''}`) : [window.location.origin];
+  const links = origins.map((origin) => `${origin}/?room=${connection.room}`);
+  const [copied, setCopied] = useState(false);
+  const copy = (text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const remove = (player: RoomInfo['players'][number]) => {
+    if (player.bot || window.confirm(`Remove ${player.name} from the room? They will not be able to rejoin from the same page.`)) {
+      connection.send({ t: 'remove', id: player.id });
+    }
+  };
 
   return (
     <main className="menu">
       <div className="menu-card lobby">
         <header>
-          <h1>Lobby</h1>
+          <h1>
+            Room <span className="room-code">{connection.room}</span>
+          </h1>
           <p>
-            {links.length > 0 ? (
-              <>Other players on your network join by opening <strong className="address">{links.join('  or  ')}</strong> in a browser.</>
-            ) : (
-              'Other players join by opening this computer’s network address in a browser.'
-            )}
+            Other players join with the code <strong>{connection.room}</strong>, or by opening{' '}
+            {links.length > 0 ? <strong className="address">{links.join('  or  ')}</strong> : 'this computer’s network address'}.
           </p>
+          {links[0] && (
+            <button type="button" onClick={() => copy(links[0]!)}>{copied ? 'Link copied' : 'Copy link'}</button>
+          )}
         </header>
 
         {reconnecting && <p className="warning">Connection lost — reconnecting…</p>}
@@ -174,8 +272,8 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 {p.bot && <span className="tag">Computer · {BOT_LEVELS[p.bot].label}</span>}
                 {!p.connected && <span className="tag">Reconnecting</span>}
                 {showPoints && <span className="points">{p.points} pts</span>}
-                {p.bot && isHost && !waiting && (
-                  <button type="button" className="remove" aria-label={`Remove ${p.name}`} onClick={() => connection.send({ t: 'removeBot', id: p.id })}>
+                {isHost && p.id !== connection.id && (p.bot ? !waiting : room.stage !== 'race' || !p.inRace) && (
+                  <button type="button" className="remove" aria-label={`Remove ${p.name}`} onClick={() => remove(p)}>
                     Remove
                   </button>
                 )}

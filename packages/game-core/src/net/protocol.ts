@@ -3,11 +3,26 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
 export const SNAPSHOT_EVERY_TICKS = 3;
+
+/**
+ * Room codes: consonants only, so a code can never spell a word, and no
+ * letters that are easy to confuse. 20^4 = 160,000 codes.
+ */
+export const ROOM_CODE_LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
+export const ROOM_CODE_LENGTH = 4;
+
+/** Normalises a typed room code: upper case, room-code letters only. Returns '' if it cannot be one. */
+export function cleanRoomCode(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const code = raw.toUpperCase().replace(/[^A-Z]/g, '');
+  if (code.length !== ROOM_CODE_LENGTH || [...code].some((c) => !ROOM_CODE_LETTERS.includes(c))) return '';
+  return code;
+}
 
 /** Runner colours, chosen to stay distinguishable from each other and from the map. */
 export const PLAYER_COLORS: readonly number[] = [
@@ -87,7 +102,8 @@ export interface ResultRow {
 }
 
 export type ClientMessage =
-  | { t: 'hello'; v: number; name: string; color: number; token?: string }
+  /** First message on a connection. `room` is the code to join; without one, a new room is created. */
+  | { t: 'hello'; v: number; name: string; color: number; room?: string; token?: string }
   | { t: 'profile'; name: string; color: number }
   | { t: 'settings'; settings: Partial<LobbySettings> }
   /** Host: start the series, or the next race. */
@@ -99,7 +115,8 @@ export type ClientMessage =
   /** Host: start the current race again on the same map. */
   | { t: 'restart' }
   | { t: 'addBot'; level: BotLevel }
-  | { t: 'removeBot'; id: string }
+  /** Host: remove a computer player, or a person (who cannot rejoin this room from the same page). */
+  | { t: 'remove'; id: string }
   | { t: 'input'; seq: number; mx: number; my: number; sprint: boolean }
   | { t: 'marker'; x: number; y: number }
   | { t: 'unmarker' }
@@ -107,7 +124,7 @@ export type ClientMessage =
   | { t: 'ready' };
 
 export type ServerMessage =
-  | { t: 'welcome'; v: number; id: string; token: string; addresses: string[] }
+  | { t: 'welcome'; v: number; id: string; token: string; room: string; addresses: string[] }
   | { t: 'error'; message: string }
   | { t: 'room'; room: RoomInfo }
   | {
@@ -185,6 +202,7 @@ export function parseClientMessage(text: string): ClientMessage | null {
         v: m.v,
         name: cleanName(m.name),
         color: m.color,
+        room: m.room === undefined ? undefined : cleanRoomCode(m.room),
         token: typeof m.token === 'string' ? m.token.slice(0, 64) : undefined,
       };
     case 'profile':
@@ -195,8 +213,8 @@ export function parseClientMessage(text: string): ClientMessage | null {
       return { t: 'pause', on: m.on === true };
     case 'addBot':
       return typeof m.level === 'string' && m.level in BOT_LEVELS ? { t: 'addBot', level: m.level as BotLevel } : null;
-    case 'removeBot':
-      return typeof m.id === 'string' ? { t: 'removeBot', id: m.id.slice(0, 16) } : null;
+    case 'remove':
+      return typeof m.id === 'string' ? { t: 'remove', id: m.id.slice(0, 16) } : null;
     case 'restart':
     case 'start':
     case 'lobby':

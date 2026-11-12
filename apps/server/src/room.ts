@@ -40,6 +40,8 @@ export interface Member {
   color: number;
   /** Null while the player's connection is down. */
   send: Send | null;
+  /** Closes this player's connection (used when the host removes them). */
+  close: (() => void) | null;
   points: number;
   inRace: boolean;
   ready: boolean;
@@ -65,6 +67,8 @@ interface Race {
 }
 
 export interface RoomOptions {
+  /** The code players use to join this room. */
+  code?: string;
   /** Addresses other machines can use to reach this server, shown in the lobby. */
   addresses?: string[];
   now?: () => number;
@@ -94,6 +98,8 @@ export class Room {
   private members: Member[] = [];
   private stage: RoomStage = 'lobby';
   private hostId = '';
+  /** A host whose connection dropped: the role goes back to them if they return. */
+  private returningHostId = '';
   private settings: LobbySettings = { size: 'small', seed: '', races: 3 };
   private racesDone = 0;
   private seriesSeed = '';
@@ -105,11 +111,20 @@ export class Room {
   private readonly now: () => number;
   private readonly randomId: () => string;
   private readonly addresses: string[];
+  readonly code: string;
+  /** Tokens of players the host removed: they may not rejoin from the same page. */
+  private readonly removed = new Set<string>();
 
   constructor(options: RoomOptions = {}) {
     this.now = options.now ?? Date.now;
     this.randomId = options.randomId ?? (() => crypto.randomUUID());
     this.addresses = options.addresses ?? [];
+    this.code = options.code ?? '';
+  }
+
+  /** True once no people are left in the room (connected or keeping their place), only computer players or nobody. */
+  get abandoned(): boolean {
+    return !this.members.some((m) => !m.bot);
   }
 
   /** For tests and diagnostics. */
@@ -119,16 +134,25 @@ export class Room {
 
   // --- Connections ---------------------------------------------------------
 
-  join(send: Send, hello: Extract<ClientMessage, { t: 'hello' }>): Member | null {
+  join(send: Send, hello: Extract<ClientMessage, { t: 'hello' }>, close: (() => void) | null = null): Member | null {
     if (hello.v !== PROTOCOL_VERSION) {
       send({ t: 'error', message: 'This page is out of date. Reload it to match the game server.' });
+      return null;
+    }
+    if (hello.token && this.removed.has(hello.token)) {
+      send({ t: 'error', message: 'The host removed you from this room.' });
       return null;
     }
     let member = hello.token ? this.members.find((m) => m.token === hello.token) : undefined;
     if (member) {
       // A returning player (page reload, dropped connection) takes their place back.
       member.send = send;
+      member.close = close;
       member.goneAt = null;
+      if (member.id === this.returningHostId) {
+        this.hostId = member.id;
+        this.returningHostId = '';
+      }
     } else {
       if (this.members.length >= MAX_PLAYERS) {
         send({ t: 'error', message: `The room is full (${MAX_PLAYERS} players).` });
@@ -140,6 +164,7 @@ export class Room {
         name: hello.name || `Runner ${this.members.length + 1}`,
         color: this.freeColor(hello.color),
         send,
+        close,
         points: 0,
         inRace: false,
         ready: false,
@@ -154,28 +179,30 @@ export class Room {
       this.members.push(member);
     }
     if (!this.members.some((m) => m.id === this.hostId && m.send)) this.hostId = member.id;
-    send({ t: 'welcome', v: PROTOCOL_VERSION, id: member.id, token: member.token, addresses: this.addresses });
+    send({ t: 'welcome', v: PROTOCOL_VERSION, id: member.id, token: member.token, room: this.code, addresses: this.addresses });
     if (this.race && member.inRace) this.sendRaceStart(member);
     this.broadcastRoom();
     return member;
   }
 
   leave(member: Member): void {
+    if (!this.members.includes(member)) return;
     member.send = null;
+    member.close = null;
     member.goneAt = this.now();
     const connected = this.members.filter((m) => m.send);
-    if (connected.length === 0) {
-      // No people left (computer players do not count): start clean for whoever comes next.
-      this.members = [];
-      this.reset();
-      return;
+    // With nobody connected the places are still kept, so a host who reloads gets the room back.
+    if (member.id === this.hostId && connected[0]) {
+      this.returningHostId = member.id;
+      this.hostId = connected[0].id;
     }
-    if (member.id === this.hostId) this.hostId = connected[0]!.id;
     if (this.race && !this.race.racers.some((m) => m.send)) this.reset();
     this.broadcastRoom();
   }
 
   receive(member: Member, message: ClientMessage): void {
+    // Someone the host removed may still have a message in flight.
+    if (!this.members.includes(member)) return;
     const isHost = member.id === this.hostId;
     switch (message.t) {
       case 'hello':
@@ -221,6 +248,7 @@ export class Room {
           name: BOT_NAMES.find((name) => !used.has(name)) ?? `Bot ${this.members.length + 1}`,
           color: this.freeColor(-1),
           send: null,
+          close: null,
           points: 0,
           inRace: false,
           ready: true,
@@ -235,11 +263,24 @@ export class Room {
         this.broadcastRoom();
         return;
       }
-      case 'removeBot':
-        if (!isHost || this.stage !== 'lobby') return;
-        this.members = this.members.filter((m) => !(m.bot && m.id === message.id));
+      case 'remove': {
+        const target = this.members.find((m) => m.id === message.id);
+        if (!isHost || !target || target === member) return;
+        if (target.bot) {
+          if (this.stage !== 'lobby') return;
+        } else {
+          // Not someone running in the current race: they would leave a hole in it.
+          if (this.race && target.inRace) return;
+          this.removed.add(target.token);
+          target.send?.({ t: 'error', message: 'The host removed you from this room.' });
+          target.close?.();
+          target.send = null;
+          target.close = null;
+        }
+        this.members = this.members.filter((m) => m !== target);
         this.broadcastRoom();
         return;
+      }
       case 'input': {
         const race = this.race;
         if (!race || !member.inRace || race.state.phase !== 'racing') return;
@@ -526,6 +567,12 @@ export class Room {
     const cutoff = this.now() - RECONNECT_GRACE_MS;
     const before = this.members.length;
     this.members = this.members.filter((m) => m.send || m.bot || (m.goneAt ?? 0) > cutoff || (this.race !== null && m.inRace));
+    if (this.abandoned) {
+      // No people left (computer players do not count): start clean.
+      this.members = [];
+      this.reset();
+      return;
+    }
     if (this.members.length !== before) this.broadcastRoom();
   }
 }

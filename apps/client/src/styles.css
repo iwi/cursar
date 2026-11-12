@@ -74,7 +74,10 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .menu-card h3 small { font-weight: 400; }
 .muted { color: var(--muted); margin: 0; }
 .actions.left { justify-content: flex-start; }
-.address { color: var(--accent); user-select: all; white-space: nowrap; }
+.address { color: var(--accent); user-select: all; overflow-wrap: anywhere; }
+.room-code { font-family: ui-monospace, monospace; letter-spacing: 0.12em; color: #fff; }
+.join-code { display: flex; gap: 8px; align-items: flex-end; margin: 16px 0; }
+.join-code input { font-family: ui-monospace, monospace; letter-spacing: 0.12em; }
 .warning { margin: 0; padding: 8px 12px; border-radius: 8px; background: #2a2413; color: #ffd98a; font-size: 14px; }
 .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .players li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: #1a1f2b; }

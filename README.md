@@ -2,7 +2,7 @@
 
 A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
 
-It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players on the same network (roadmap Phases 0–2). Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet once the server is hosted (roadmap Phases 0–2b). Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Run it
 
@@ -22,17 +22,20 @@ Leave that terminal open while you play; `Ctrl+C` stops the server.
 
 ### Playing with friends
 
-1. One person (the host computer) runs `npm start`. Nobody else needs to install anything.
-2. Everyone, including the host, opens the address in a desktop browser and chooses **Play with friends**. The lobby shows the address to share.
-3. Each player picks a name and colour. The first player in is the host: they choose the map size, the number of races in the series and, optionally, a seed, then start.
-4. In the preview, a race starts early once everyone has pressed `Enter`.
-5. After each race the host starts the next one. Points for a place are 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores nothing.
+1. Someone runs the game server: `npm start` on one computer for a game on your own network, or the hosted server on Railway for play over the internet (see [docs/DEPLOY.md](docs/DEPLOY.md)). Nobody else needs to install anything.
+2. One player opens the address in a desktop browser, chooses **Play with friends**, then **Create a room**. The lobby shows a four-letter room code and a link to share.
+3. Everyone else opens the link, or chooses **Play with friends** and types the code. One server holds many rooms at once, each with its own players.
+4. Each player picks a name and colour. Whoever created the room is the host: they choose the map size, the number of races in the series and, optionally, a seed, then start. If the host's connection drops, someone else takes over until they return.
+5. In the preview, a race starts early once everyone has pressed `Enter`.
+6. After each race the host starts the next one. Points for a place are 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores nothing.
 
 If other computers cannot open the address, the host computer's firewall is the usual cause: allow Node.js to accept incoming connections on private networks (Windows asks about this the first time; on macOS it is under System Settings → Network → Firewall).
 
 The host can add **computer players** in the lobby (Easy, Normal or Hard). They take the best route, so their level is how fast they run. This is also the way to try multiplayer alone.
 
-During a race the host can press `Esc` (or the Pause button) to freeze it for everyone. From the pause panel the host can resume, restart the race on the same map, or cancel it and return everyone to the lobby.
+The host can **remove** a player from the lobby, from the results, or while they wait for the next race (not mid-race). A removed player cannot rejoin that room from the same browser tab.
+
+During a race the host can press `Esc` (or the Pause button) to freeze it for everyone. From the pause panel the host can resume (play continues after a 3-2-1), restart the race on the same map, or cancel it and return everyone to the lobby.
 
 ### Working on the code
 
@@ -90,10 +93,12 @@ apps/client/          The browser application.
   src/ui/               React: menu, lobby, HUD, results, tuning panel.
   src/audio/            Synthesised sound cues.
 apps/server/          The game server (Node.js).
-  src/room.ts           Lobby, race loop, what each player may see, results and series points.
-  src/index.ts          WebSocket connections and serving the built page.
-  tests/                Tests for the room.
+  src/rooms.ts          All the rooms on the server, found by their code.
+  src/room.ts           One room: lobby, race loop, what each player may see, results and series points.
+  src/index.ts          WebSocket connections, connection limits, serving the built page.
+  tests/                Tests for the rooms.
 docs/DECISIONS.md     What was decided and why.
+docs/DEPLOY.md        Hosting the server for play over the internet (Railway; railway.json).
 ```
 
 The important rule: `game-core` never imports from the client or the server. The race advances only through `step(state, inputs)`, so the same rules run in the browser for solo play and on the server for multiplayer.

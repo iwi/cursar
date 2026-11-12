@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { audio } from './audio/AudioEngine';
 import { type Settings, loadSettings, randomSeed, saveSettings } from './storage';
 import { Menu } from './ui/Menu';
-import { Multiplayer } from './ui/Multiplayer';
+import { Multiplayer, roomFromAddress } from './ui/Multiplayer';
 import { Race } from './ui/Race';
 
 export function App() {
@@ -12,7 +12,8 @@ export function App() {
     return loaded.seed ? loaded : { ...loaded, seed: randomSeed() };
   });
   const [racing, setRacing] = useState<{ map: GameMap; attempt: number } | null>(null);
-  const [online, setOnline] = useState(false);
+  // Opening a shared room link goes straight to that room.
+  const [online, setOnline] = useState(() => roomFromAddress() !== '');
   // One config object for the session, so live tuning carries over between races.
   const config = useMemo<GameConfig>(() => cloneConfig(), []);
 
