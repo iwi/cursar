@@ -610,3 +610,29 @@ describe('enemies in a network race', () => {
     expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).some((e) => e.type === 'foeCue')).toBe(false);
   });
 });
+
+describe('ready in the lobby', () => {
+  it('lets each person say they are ready, shows it to everyone, and starts afresh back in the lobby', () => {
+    const { clients } = setup(['Ana', 'Ben']);
+    const [ana, ben] = clients;
+    const readyOf = (c: typeof ana, name: string) => c!.last('room').room.players.find((p) => p.name === name)!.ready;
+    expect(readyOf(ana, 'Ben')).toBe(false);
+    ben!.send({ t: 'lobbyReady', on: true });
+    expect(readyOf(ana, 'Ben')).toBe(true);
+    ben!.send({ t: 'lobbyReady', on: false });
+    expect(readyOf(ana, 'Ben')).toBe(false);
+    // Computer players are always ready.
+    ana!.send({ t: 'addBot', level: 'easy' });
+    expect(ana!.last('room').room.players.find((p) => p.bot)!.ready).toBe(true);
+    // Back in the lobby after a race, people say so again.
+    ben!.send({ t: 'lobbyReady', on: true });
+    ana!.send({ t: 'start' });
+    ana!.send({ t: 'lobby' });
+    expect(readyOf(ana, 'Ben')).toBe(false);
+  });
+
+  it('ignores "ready" outside the lobby, and parses it safely', () => {
+    expect(parseClientMessage('{"t":"lobbyReady","on":"yes"}')).toEqual({ t: 'lobbyReady', on: false });
+    expect(parseClientMessage('{"t":"lobbyReady","on":true}')).toEqual({ t: 'lobbyReady', on: true });
+  });
+});

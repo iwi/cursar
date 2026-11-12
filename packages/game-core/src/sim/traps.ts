@@ -37,10 +37,10 @@ export function springTraps(state: RaceState, p: PlayerState, events: GameEvent[
       applyEffect(config, p, 'blind', events, t.flashBlindSeconds);
       break;
     case 'reverse':
-      applyEffect(config, p, 'reversed', events, t.trickSeconds);
+      applyEffect(config, p, 'reversed', events, t.reverseSeconds);
       break;
     case 'confuse':
-      applyEffect(config, p, 'confused', events, t.trickSeconds);
+      applyEffect(config, p, 'confused', events, t.confuseSeconds);
       break;
   }
 }

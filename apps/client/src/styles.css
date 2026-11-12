@@ -95,7 +95,9 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .profile .field:first-child, .field.grow { flex: 1; min-width: 180px; }
 .field input, .field select {
   width: 100%; padding: 8px 12px; background: #0f131b; border: 1px solid var(--panel-edge); border-radius: 8px;
+  color: var(--text); font: inherit;
 }
+.field select option, .add-bot select option { background: #0f131b; color: var(--text); }
 .field input:disabled, .field select:disabled { opacity: 0.6; }
 .swatches { display: flex; gap: 6px; }
 .swatches button { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
@@ -184,6 +186,11 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .stamina { width: 260px; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .stamina div { height: 100%; background: var(--good); border-radius: 6px; }
 .stamina.exhausted div { background: var(--bad); }
+.tag.ready { color: var(--good); border-color: var(--good); }
+.tag.choosing { opacity: 0.7; }
+.ready-row { display: grid; gap: 10px; }
+.ready-row button.active { border-color: var(--good); color: var(--good); }
+.ready-count { margin: 0; text-align: center; color: var(--muted); font-size: 14px; }
 .hearts { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
 .hearts i { font-style: normal; color: rgba(255, 255, 255, 0.18); }
 .hearts i.full { color: #ff5a6e; }

@@ -3,7 +3,7 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -63,6 +63,8 @@ export interface RoomPlayer {
   points: number;
   /** False for someone who joined while a race was running and is waiting for the next. */
   inRace: boolean;
+  /** Has said they are ready in the lobby (name and colour chosen). Computer players always are. */
+  ready: boolean;
   /** Set for a computer player. */
   bot: BotLevel | null;
 }
@@ -137,7 +139,9 @@ export type ClientMessage =
   | { t: 'marker'; x: number; y: number }
   | { t: 'unmarker' }
   /** Done studying the preview. */
-  | { t: 'ready' };
+  | { t: 'ready' }
+  /** In the lobby: ready (name and colour chosen), or not ready after all. */
+  | { t: 'lobbyReady'; on: boolean };
 
 export type ServerMessage =
   | { t: 'welcome'; v: number; id: string; token: string; room: string; addresses: string[] }
@@ -233,6 +237,8 @@ export function parseClientMessage(text: string): ClientMessage | null {
       return { t: 'settings', settings: cleanSettings(m.settings) };
     case 'pause':
       return { t: 'pause', on: m.on === true };
+    case 'lobbyReady':
+      return { t: 'lobbyReady', on: m.on === true };
     case 'addBot':
       return typeof m.level === 'string' && m.level in BOT_LEVELS ? { t: 'addBot', level: m.level as BotLevel } : null;
     case 'remove':

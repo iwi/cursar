@@ -84,8 +84,10 @@ export interface GameConfig {
     snareStunSeconds: number;
     glueSlowSeconds: number;
     flashBlindSeconds: number;
-    /** Reversed or confused controls from a trick tile. */
-    trickSeconds: number;
+    /** Reversed controls from a trick tile. */
+    reverseSeconds: number;
+    /** Confused controls from a trick tile. */
+    confuseSeconds: number;
   };
   /** Enemies. Where they live comes from the map. */
   enemies: {
@@ -186,7 +188,8 @@ export const DEFAULT_CONFIG: GameConfig = {
     snareStunSeconds: 1,
     glueSlowSeconds: 4,
     flashBlindSeconds: 5,
-    trickSeconds: 1,
+    reverseSeconds: 2,
+    confuseSeconds: 1,
   },
   enemies: {
     patroller: { radius: 0.35, speed: 2 },
@@ -199,7 +202,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     slow: { seconds: 3, speedMul: 0.6 },
     haste: { seconds: 4, speedMul: 1.3 },
     stun: { seconds: 0.8 },
-    reversed: { seconds: 1 },
+    reversed: { seconds: 2 },
     confused: { seconds: 1 },
     blind: { seconds: 6, visionMul: 0.2 },
     controlGuardSeconds: 1.5,

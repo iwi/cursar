@@ -48,7 +48,10 @@ export interface Member {
   close: (() => void) | null;
   points: number;
   inRace: boolean;
+  /** Done studying the race preview. */
   ready: boolean;
+  /** Said "ready" in the lobby. */
+  lobbyReady: boolean;
   queue: PlayerInput[];
   lastInput: PlayerInput;
   /** Ticks since an input last arrived from this player. */
@@ -172,6 +175,7 @@ export class Room {
         points: 0,
         inRace: false,
         ready: false,
+        lobbyReady: false,
         queue: [],
         lastInput: NO_INPUT,
         starved: 0,
@@ -217,6 +221,11 @@ export class Room {
         if (message.color !== member.color) member.color = this.freeColor(message.color, member);
         this.broadcastRoom();
         return;
+      case 'lobbyReady':
+        if (this.stage !== 'lobby' || member.bot) return;
+        member.lobbyReady = message.on;
+        this.broadcastRoom();
+        return;
       case 'settings':
         if (!isHost || this.stage !== 'lobby') return;
         this.settings = { ...this.settings, ...message.settings };
@@ -256,6 +265,7 @@ export class Room {
           points: 0,
           inRace: false,
           ready: true,
+          lobbyReady: true,
           queue: [],
           lastInput: NO_INPUT,
           starved: 0,
@@ -328,6 +338,8 @@ export class Room {
     for (const m of this.members) {
       m.points = 0;
       m.inRace = false;
+      // Back in the lobby, everyone says they are ready again (computer players always are).
+      m.lobbyReady = m.bot !== null;
     }
   }
 
@@ -351,6 +363,7 @@ export class Room {
         connected: m.send !== null || m.bot !== null,
         points: m.points,
         inRace: m.inRace,
+        ready: m.lobbyReady || m.bot !== null,
         bot: m.bot,
       })),
     };

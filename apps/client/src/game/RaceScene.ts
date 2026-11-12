@@ -149,6 +149,8 @@ export class RaceScene extends Phaser.Scene {
   private ghostLast: { x: number; y: number } | null = null;
   private rumbleTimer = 0;
   private tellTimer = 0;
+  /** "You" above the local runner at the start, so everyone finds themselves at once. */
+  private youLabel: Phaser.GameObjects.Text | null = null;
   /** Per patroller (map enemy index): where it was and how far it has walked since its last step sound. */
   private patrolSteps = new Map<number, { x: number; y: number; stride: number }>();
   /** Per obstacle: the last quarter turn of a barrier, or whether a gate was closed, for their sounds. */
@@ -873,6 +875,7 @@ export class RaceScene extends Phaser.Scene {
     }
 
     if (racing) this.drawEffects(top, x, y, r, me.effects);
+    this.drawYou(top, x, y, r * scale);
 
     // Waypoint flags (the player's own notes, so they show through the fog).
     me.markers.forEach((marker, index) => {
@@ -1106,6 +1109,32 @@ export class RaceScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  /**
+   * At the start (preview, count and the first seconds of the race) the local
+   * runner gets a "You" label and rings rippling outwards, so it stands out
+   * among the others in the start plaza. Sizes are in screen pixels, whatever
+   * the zoom.
+   */
+  private drawYou(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number): void {
+    const { state } = this;
+    const intro = state.phase === 'preview' || state.phase === 'countdown' || (state.phase === 'racing' && state.raceTime < 3 && !this.me().finished);
+    if (!this.youLabel) {
+      this.youLabel = this.add
+        .text(0, 0, 'You', { fontFamily: 'system-ui, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#0b0d12', strokeThickness: 5 })
+        .setOrigin(0.5, 1)
+        .setDepth(26);
+    }
+    this.youLabel.setVisible(intro);
+    if (!intro) return;
+    const zoom = this.cameras.main.zoom;
+    const px = 1 / zoom;
+    for (let k = 0; k < 2; k++) {
+      const u = ((this.time.now / 1100 + k / 2) % 1 + 1) % 1;
+      g.lineStyle(3 * px, 0xffffff, 0.9 * (1 - u)).strokeCircle(x, y, r + (10 + 46 * u) * px);
+    }
+    this.youLabel.setPosition(x, y - r - 14 * px).setScale(px);
   }
 
   /** On and off about eight times a second, for runners in their safe time. */

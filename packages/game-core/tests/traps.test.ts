@@ -37,8 +37,8 @@ describe('traps', () => {
     snare: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'stun', seconds: config.traps.snareStunSeconds }),
     glue: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'slow', seconds: config.traps.glueSlowSeconds }),
     flash: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'blind', seconds: config.traps.flashBlindSeconds }),
-    reverse: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'reversed', seconds: config.traps.trickSeconds }),
-    confuse: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'confused', seconds: config.traps.trickSeconds }),
+    reverse: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'reversed', seconds: config.traps.reverseSeconds }),
+    confuse: (e) => expect(e).toContainEqual({ type: 'effect', playerId: 'p1', kind: 'confused', seconds: config.traps.confuseSeconds }),
   };
 
   for (const kind of TRAP_KINDS) {

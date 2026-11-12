@@ -25,7 +25,7 @@ Leave that terminal open while you play; `Ctrl+C` stops the server.
 1. Someone runs the game server: `npm start` on one computer for a game on your own network, or the hosted server on Railway for play over the internet (see [docs/DEPLOY.md](docs/DEPLOY.md)). Nobody else needs to install anything.
 2. One player opens the address in a desktop browser, chooses **Play with friends**, then **Create a room**. The lobby shows a four-letter room code and a link to share.
 3. Everyone else opens the link, or chooses **Play with friends** and types the code. One server holds many rooms at once, each with its own players.
-4. Each player picks a name and colour. Whoever created the room is the host: they choose the map size, the number of races in the series and, optionally, a seed, then start. If the host's connection drops, someone else takes over until they return.
+4. Each player picks a name and colour, says they are ready, and can turn on the checkpoint arrow for themselves. Whoever created the room is the host: they choose the map size, the number of races in the series and, optionally, a seed, then start. If the host's connection drops, someone else takes over until they return.
 5. In the preview, a race starts early once everyone has pressed `Enter`.
 6. After each race the host starts the next one. Points for a place are 10, 7, 5, 4, 3, 2, 1, 1; not finishing scores nothing.
 

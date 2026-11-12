@@ -203,6 +203,8 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
   const [botLevel, setBotLevel] = useState<BotLevel>('normal');
   const waiting = room.stage !== 'lobby';
   const showPoints = room.players.some((p) => p.points > 0);
+  const people = room.players.filter((p) => !p.bot).length;
+  const readyCount = room.players.filter((p) => !p.bot && p.ready).length;
 
   const saveName = () => {
     const clean = name.trim();
@@ -270,6 +272,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 </span>
                 {p.id === room.hostId && <span className="tag">Host</span>}
                 {p.bot && <span className="tag">Computer · {BOT_LEVELS[p.bot].label}</span>}
+                {room.stage === 'lobby' && !p.bot && (p.ready ? <span className="tag ready">Ready</span> : <span className="tag choosing">Choosing…</span>)}
                 {!p.connected && <span className="tag">Reconnecting</span>}
                 {showPoints && <span className="points">{p.points} pts</span>}
                 {isHost && p.id !== connection.id && (p.bot ? !waiting : room.stage !== 'race' || !p.inRace) && (
@@ -322,6 +325,18 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
           </div>
         </section>
 
+        {!waiting && me && (
+          <section className="ready-row">
+            <button type="button" className={me.ready ? 'active' : 'primary'} onClick={() => connection.send({ t: 'lobbyReady', on: !me.ready })}>
+              {me.ready ? 'Ready ✓ (click if you are not)' : 'I’m ready'}
+            </button>
+            <label className="check">
+              <input type="checkbox" checked={settings.finishArrow} onChange={(event) => onChange({ finishArrow: event.target.checked })} />
+              <span>Show me an arrow toward the nearest checkpoint, then the finish <small>(easier; only for you)</small></span>
+            </label>
+          </section>
+        )}
+
         <section>
           <h3>Race settings {!isHost && <small>(chosen by {host?.name ?? 'the host'})</small>}</h3>
           <div className="sizes">
@@ -357,6 +372,11 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
           </div>
         </section>
 
+        {isHost && !waiting && (
+          <p className="ready-count">
+            {readyCount === people ? `Everyone is ready (${readyCount} of ${people})` : `${readyCount} of ${people} ready`}
+          </p>
+        )}
         {isHost && !waiting ? (
           <button
             type="button"
