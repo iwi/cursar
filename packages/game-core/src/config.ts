@@ -218,7 +218,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   enemies: {
     patroller: { radius: 0.35, speed: 2 },
-    chaser: { radius: 0.4, speed: 4.4, wakeRange: 5, sightRange: 10, giveUpSeconds: 2, restSeconds: 3, stunSeconds: 0.8 },
+    chaser: { radius: 0.4, speed: 3.96, wakeRange: 5, sightRange: 10, giveUpSeconds: 2, restSeconds: 3, stunSeconds: 0.8 },
     turret: { range: 9, turnRate: 2.5, chargeSeconds: 0.8, reloadSeconds: 2.5, boltSpeed: 6, boltRadius: 0.2, slowSeconds: 3 },
     hearingRange: 12,
   },

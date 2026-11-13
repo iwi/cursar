@@ -334,6 +334,14 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
               <input type="checkbox" checked={settings.finishArrow} onChange={(event) => onChange({ finishArrow: event.target.checked })} />
               <span>Show me an arrow toward the nearest checkpoint, then the finish <small>(easier; only for you)</small></span>
             </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.vimKeys} onChange={(event) => onChange({ vimKeys: event.target.checked })} />
+              <span>Also move with <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> <small>(vim keys)</small></span>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.mouseMove} onChange={(event) => onChange({ mouseMove: event.target.checked })} />
+              <span>Move with the mouse <small>(click or hold to run towards the pointer; right click stops)</small></span>
+            </label>
           </section>
         )}
 

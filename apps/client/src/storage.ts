@@ -5,6 +5,10 @@ export interface Settings {
   seed: string;
   /** Show an arrow pointing straight at the nearest checkpoint, then the finish (direction only). */
   finishArrow: boolean;
+  /** Also move with H J K L, as in vim. */
+  vimKeys: boolean;
+  /** During the race, click (or hold) to run towards the pointer. */
+  mouseMove: boolean;
   muted: boolean;
   volume: number;
   /** Name and colour used in network play (the colour is also your runner's in single player). */
@@ -12,7 +16,7 @@ export interface Settings {
   color: number;
 }
 
-const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
+const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
 const SETTINGS_KEY = 'cursar.settings';
 const ghostKey = (mapId: string) => `cursar.ghost.${mapId}`;
 

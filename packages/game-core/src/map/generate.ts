@@ -3,13 +3,14 @@ import { ENEMY_KINDS, type EnemySpawn, type GameMap, type Landmark, type Landmar
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
-export type MapSize = 'small' | 'medium' | 'large';
+export type MapSize = 'tiny' | 'small' | 'medium' | 'large';
 
 /** Map sizes in maze cells. Each cell is a 2x2-tile patch of floor with 1-tile walls between. */
 export const MAP_SIZES: Record<
   MapSize,
   { cols: number; rows: number; checkpoints: number; obstacles: number; traps: number; enemies: number; chasers: number; treasures: number; label: string }
 > = {
+  tiny: { cols: 15, rows: 11, checkpoints: 2, obstacles: 3, traps: 3, enemies: 2, chasers: 1, treasures: 3, label: 'Tiny' },
   small: { cols: 21, rows: 15, checkpoints: 3, obstacles: 5, traps: 6, enemies: 3, chasers: 2, treasures: 6, label: 'Small' },
   medium: { cols: 22, rows: 16, checkpoints: 4, obstacles: 6, traps: 8, enemies: 4, chasers: 2, treasures: 8, label: 'Medium' },
   large: { cols: 24, rows: 17, checkpoints: 5, obstacles: 7, traps: 10, enemies: 5, chasers: 2, treasures: 10, label: 'Large' },

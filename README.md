@@ -58,7 +58,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 
 | Action | Control |
 |---|---|
-| Move | `W` `A` `S` `D` or the arrow keys |
+| Move | `W` `A` `S` `D` or the arrow keys; optionally `H` `J` `K` `L` (vim keys) or the mouse (click or hold to run towards the pointer, right click stops), both turned on in the menu or lobby |
 | Sprint | `Shift` (uses stamina) |
 | Drop a waypoint | Click the map during the preview (up to 3) |
 | Remove the last waypoint | Right-click or `Backspace` during the preview |

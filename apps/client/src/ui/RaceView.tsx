@@ -5,6 +5,7 @@ import { Bridge, type HudState } from '../game/bridge';
 import { createGame } from '../game/createGame';
 import type { RaceDriver } from '../game/driver';
 import { EFFECT_STYLE, cssColor } from '../game/effects';
+import { bindingsFor } from '../game/input';
 import { type Settings, formatTime } from '../storage';
 
 interface Props {
@@ -35,7 +36,7 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
 
   useEffect(() => {
     const demo = new URLSearchParams(window.location.search).has('demo');
-    const game = createGame(host.current!, { map, driver: createDriver(), finishArrow: settings.finishArrow, bridge, audio, demo });
+    const game = createGame(host.current!, { map, driver: createDriver(), finishArrow: settings.finishArrow, bindings: bindingsFor(settings), mouseMove: settings.mouseMove, bridge, audio, demo });
     const offHud = bridge.on('hud', setHud);
     const offRestart = bridge.on('restart', () => restart.current?.());
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -14,3 +14,15 @@ export const DEFAULT_BINDINGS: KeyBindings = {
   right: ['D', 'RIGHT'],
   sprint: ['SHIFT'],
 };
+
+/** The default keys plus, if asked for, vim's: H left, J down, K up, L right. */
+export function bindingsFor(options: { vimKeys: boolean }): KeyBindings {
+  if (!options.vimKeys) return DEFAULT_BINDINGS;
+  return {
+    ...DEFAULT_BINDINGS,
+    up: [...DEFAULT_BINDINGS.up, 'K'],
+    down: [...DEFAULT_BINDINGS.down, 'J'],
+    left: [...DEFAULT_BINDINGS.left, 'H'],
+    right: [...DEFAULT_BINDINGS.right, 'L'],
+  };
+}

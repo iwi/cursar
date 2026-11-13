@@ -39,12 +39,16 @@ export interface RaceSceneData {
   bridge: Bridge;
   audio: AudioEngine;
   bindings?: KeyBindings;
+  /** During the race, clicking (or holding) the mouse runs towards the pointer. */
+  mouseMove?: boolean;
   /** Developer aid: the runner follows the shortest route by itself. */
   demo?: boolean;
 }
 
 /** Pixels per tile at zoom 1. Purely a rendering choice: the simulation works in tiles. */
 const PX = 32;
+/** Mouse movement stops this close (tiles) to where you clicked. */
+const MOUSE_ARRIVE_TILES = 0.3;
 /** How many tiles of the map fit across the shorter side of the window during a race. */
 const TILES_ACROSS = 15;
 
@@ -122,6 +126,9 @@ export class RaceScene extends Phaser.Scene {
   private driver!: RaceDriver;
   private routesDrawn = false;
   private autopilot: ReturnType<typeof createAutopilot> | null = null;
+  /** Mouse movement: where the runner is heading (tiles), and whether the button is held. */
+  private moveTarget: { x: number; y: number } | null = null;
+  private mouseHeld = false;
   private labels = new Map<string, Phaser.GameObjects.Text>();
 
   private entityGfx!: Phaser.GameObjects.Graphics;
@@ -203,7 +210,19 @@ export class RaceScene extends Phaser.Scene {
     });
 
     this.input.mouse?.disableContextMenu();
+    this.input.on('pointerup', () => (this.mouseHeld = false));
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.state.phase === 'racing' && this.data_.mouseMove) {
+        // Mouse movement: a click sets where to run, holding keeps following the pointer, a right click stops.
+        if (pointer.rightButtonDown()) {
+          this.moveTarget = null;
+          return;
+        }
+        this.mouseHeld = true;
+        const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.moveTarget = { x: world.x / PX, y: world.y / PX };
+        return;
+      }
       if (this.state.phase !== 'preview') return;
       if (pointer.rightButtonDown()) {
         if (driver.removeLastMarker()) this.data_.audio.click();
@@ -312,11 +331,31 @@ export class RaceScene extends Phaser.Scene {
       return { mx, my, sprint };
     }
     const down = (action: keyof KeyBindings) => this.keys[action].some((key) => key.isDown);
-    return {
-      mx: (down('right') ? 1 : 0) - (down('left') ? 1 : 0),
-      my: (down('down') ? 1 : 0) - (down('up') ? 1 : 0),
-      sprint: down('sprint'),
-    };
+    const mx = (down('right') ? 1 : 0) - (down('left') ? 1 : 0);
+    const my = (down('down') ? 1 : 0) - (down('up') ? 1 : 0);
+    const sprint = down('sprint');
+    // The keys always win over mouse movement, and cancel it.
+    if (mx !== 0 || my !== 0 || this.state.phase !== 'racing') {
+      this.moveTarget = null;
+      return { mx, my, sprint };
+    }
+    if (this.mouseHeld) {
+      const pointer = this.input.activePointer;
+      const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      this.moveTarget = { x: world.x / PX, y: world.y / PX };
+    }
+    if (this.moveTarget) {
+      const me = this.me();
+      const dx = this.moveTarget.x - me.x;
+      const dy = this.moveTarget.y - me.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < MOUSE_ARRIVE_TILES) {
+        if (!this.mouseHeld) this.moveTarget = null;
+        return { mx: 0, my: 0, sprint };
+      }
+      return { mx: dx / dist, my: dy / dist, sprint };
+    }
+    return { mx: 0, my: 0, sprint };
   }
 
   private handleEvent(event: GameEvent): void {

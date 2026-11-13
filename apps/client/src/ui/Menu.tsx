@@ -11,6 +11,7 @@ interface Props {
 }
 
 const SIZE_NOTES: Record<MapSize, string> = {
+  tiny: 'About a minute',
   small: 'Around 2 minutes',
   medium: 'Around 3 minutes',
   large: 'Around 4–5 minutes',
@@ -86,6 +87,14 @@ export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
           <span>Show an arrow toward the nearest checkpoint, then the finish <small>(easier)</small></span>
         </label>
         <label className="check">
+          <input type="checkbox" checked={settings.vimKeys} onChange={(event) => onChange({ vimKeys: event.target.checked })} />
+          <span>Also move with <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> <small>(vim keys)</small></span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={settings.mouseMove} onChange={(event) => onChange({ mouseMove: event.target.checked })} />
+          <span>Move with the mouse <small>(click or hold to run towards the pointer; right click stops)</small></span>
+        </label>
+        <label className="check">
           <input type="checkbox" checked={!settings.muted} onChange={(event) => onChange({ muted: !event.target.checked })} />
           <span>Sound</span>
         </label>
@@ -96,7 +105,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
 
         <table className="keys">
           <tbody>
-            <tr><th>Move</th><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrow keys</td></tr>
+            <tr><th>Move</th><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrow keys{settings.vimKeys && <> or <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></>}{settings.mouseMove && ', or click where to run'}</td></tr>
             <tr><th>Sprint</th><td><kbd>Shift</kbd> (uses stamina)</td></tr>
             <tr><th>Waypoints</th><td>Click the map during the preview (up to {DEFAULT_CONFIG.markers.max})</td></tr>
             <tr><th>Start early</th><td><kbd>Enter</kbd> during the preview</td></tr>
