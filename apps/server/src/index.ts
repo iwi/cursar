@@ -3,7 +3,7 @@ import { type IncomingMessage, createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_CONFIG, parseClientMessage } from '@cursar/game-core';
+import { DEFAULT_CONFIG, MAX_MAP_MESSAGE, parseClientMessage } from '@cursar/game-core';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { type Seat, Rooms } from './rooms';
 
@@ -76,7 +76,7 @@ const http = createServer((req, res) => {
 });
 
 const rooms = new Rooms({ addresses: lanAddresses(), maxRooms: MAX_ROOMS });
-const sockets = new WebSocketServer({ server: http, path: '/ws', maxPayload: 4096 });
+const sockets = new WebSocketServer({ server: http, path: '/ws', maxPayload: MAX_MAP_MESSAGE * 2 });
 
 function visitorAddress(req: IncomingMessage): string {
   if (TRUST_PROXY) {

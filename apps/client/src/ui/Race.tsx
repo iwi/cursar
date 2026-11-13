@@ -11,8 +11,11 @@ interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   onRetry: () => void;
-  onNewMap: () => void;
+  /** Absent for a hand-made map. */
+  onNewMap?: () => void;
   onMenu: () => void;
+  /** What the menu button says (for example, back to the editor). */
+  menuLabel?: string;
 }
 
 interface Outcome extends LocalResult {
@@ -21,7 +24,7 @@ interface Outcome extends LocalResult {
 }
 
 /** A single-player race against the clock and the ghost of your best run. */
-export function Race({ map, config, settings, onChange, onRetry, onNewMap, onMenu }: Props) {
+export function Race({ map, config, settings, onChange, onRetry, onNewMap, onMenu, menuLabel = 'Menu' }: Props) {
   const ghost = useMemo<GhostRecording | null>(() => loadGhost(map.id), [map.id]);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [showTuning, setShowTuning] = useState(false);
@@ -99,8 +102,8 @@ export function Race({ map, config, settings, onChange, onRetry, onNewMap, onMen
                 </div>
                 <div className="actions">
                   <button type="button" className="primary" onClick={onRetry} autoFocus>Race this map again</button>
-                  <button type="button" onClick={onNewMap}>New map</button>
-                  <button type="button" onClick={onMenu}>Menu</button>
+                  {onNewMap && <button type="button" onClick={onNewMap}>New map</button>}
+                  <button type="button" onClick={onMenu}>{menuLabel}</button>
                 </div>
                 <p className="legend">
                   <span className="swatch you" style={{ background: hex(settings.color) }} /> Your route

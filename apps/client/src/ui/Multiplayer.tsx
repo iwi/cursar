@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
 import { Connection, type ConnectionStatus } from '../net/Connection';
-import type { Settings } from '../storage';
+import { type Settings, loadMaps } from '../storage';
 import { NetRace } from './NetRace';
 import { hex } from './Race';
 
@@ -200,6 +200,8 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
   const taken = new Set(room.players.filter((p) => p.id !== connection.id).map((p) => p.color));
   const [name, setName] = useState(me?.name ?? settings.name);
   const [seed, setSeed] = useState(room.settings.seed);
+  const [myMaps] = useState(() => loadMaps());
+  const custom = room.customMap;
   const [botLevel, setBotLevel] = useState<BotLevel>('normal');
   const waiting = room.stage !== 'lobby';
   const showPoints = room.players.some((p) => p.points > 0);
@@ -347,7 +349,28 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
 
         <section>
           <h3>Race settings {!isHost && <small>(chosen by {host?.name ?? 'the host'})</small>}</h3>
-          <div className="sizes">
+          <label className="field">
+            <span>Map</span>
+            {isHost && !waiting ? (
+              <select
+                value={custom?.id ?? ''}
+                onChange={(event) => {
+                  const chosen = myMaps.find((m) => m.id === event.target.value) ?? null;
+                  connection.send({ t: 'map', map: chosen });
+                }}
+              >
+                <option value="">Generated maps (a new one each race)</option>
+                {myMaps.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name} (my map)</option>
+                ))}
+              </select>
+            ) : (
+              <strong>{custom ? `${custom.name} (hand-made)` : 'Generated maps'}</strong>
+            )}
+            {isHost && !waiting && myMaps.length === 0 && <small>Maps you make in the map editor can be raced here.</small>}
+            {custom && <small>Every race in the series is on this map.</small>}
+          </label>
+          {!custom && <div className="sizes">
             {(Object.keys(MAP_SIZES) as MapSize[]).map((size) => (
               <label key={size} className={room.settings.size === size ? 'size selected' : 'size'}>
                 <input type="radio" name="size" disabled={!isHost || waiting} checked={room.settings.size === size} onChange={() => set({ size })} />
@@ -355,7 +378,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 <span>{MAP_SIZES[size].checkpoints} checkpoints</span>
               </label>
             ))}
-          </div>
+          </div>}
           <div className="row">
             <label className="field">
               <span>Races in the series</span>
@@ -365,7 +388,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 ))}
               </select>
             </label>
-            <label className="field grow">
+            {!custom && <label className="field grow">
               <span>Map seed <small>(blank for random maps)</small></span>
               <input
                 value={isHost ? seed : room.settings.seed}
@@ -376,7 +399,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 onChange={(event) => setSeed(event.target.value)}
                 onBlur={() => set({ seed })}
               />
-            </label>
+            </label>}
           </div>
         </section>
 

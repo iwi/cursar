@@ -26,6 +26,7 @@ import {
   hearFoe,
   createAutopilot,
   createRace,
+  encodeMap,
   generateMap,
   pickSkill,
   placeMarker,
@@ -111,6 +112,8 @@ export class Room {
   private settings: LobbySettings = { size: 'small', seed: '', races: 3 };
   private racesDone = 0;
   private seriesSeed = '';
+  /** A hand-made map chosen by the host, raced instead of generated maps. */
+  private customMap: GameMap | null = null;
   private race: Race | null = null;
   private raceId = 0;
   private paused = false;
@@ -230,6 +233,11 @@ export class Room {
       case 'settings':
         if (!isHost || this.stage !== 'lobby') return;
         this.settings = { ...this.settings, ...message.settings };
+        this.broadcastRoom();
+        return;
+      case 'map':
+        if (!isHost || this.stage !== 'lobby') return;
+        this.customMap = message.map;
         this.broadcastRoom();
         return;
       case 'start':
@@ -364,6 +372,7 @@ export class Room {
       hostId: this.hostId,
       settings: this.settings,
       racesDone: this.racesDone,
+      customMap: this.customMap ? { id: this.customMap.id, name: this.customMap.name } : null,
       players: this.members.map((m) => ({
         id: m.id,
         name: m.name,
@@ -391,7 +400,7 @@ export class Room {
     const racers = this.members.filter((m) => m.send || m.bot).slice(0, MAX_PLAYERS);
     if (racers.length === 0) return;
     const seed = `${this.seriesSeed}-${this.racesDone + 1}`;
-    const map = generateMap({ seed, size: this.settings.size });
+    const map = this.customMap ?? generateMap({ seed, size: this.settings.size });
     // Start positions rotate from race to race so nobody keeps the same one.
     const state = createRace(
       map,
@@ -428,6 +437,7 @@ export class Room {
       racesTotal: this.settings.races,
       slot: (index + this.racesDone) % race.map.startPositions.length,
       runners: race.racers.map((m) => ({ id: m.id, name: m.name, color: m.color })),
+      ...(this.customMap ? { map: encodeMap(race.map) } : {}),
     });
   }
 

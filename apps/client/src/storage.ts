@@ -1,10 +1,12 @@
-import type { GhostRecording, MapSize } from '@cursar/game-core';
+import { type EncodedMap, type GameMap, type GhostRecording, type MapSize, decodeMap, encodeMap } from '@cursar/game-core';
 
 export interface Settings {
   size: MapSize;
   seed: string;
   /** Show an arrow pointing straight at the nearest checkpoint, then the finish (direction only). */
   finishArrow: boolean;
+  /** The hand-made map to race in solo play (its id), or '' for generated maps. */
+  mapId: string;
   /** Also move with H J K L, as in vim. */
   vimKeys: boolean;
   /** During the race, click (or hold) to run towards the pointer. */
@@ -16,7 +18,7 @@ export interface Settings {
   color: number;
 }
 
-const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
+const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
 const SETTINGS_KEY = 'cursar.settings';
 const ghostKey = (mapId: string) => `cursar.ghost.${mapId}`;
 
@@ -53,6 +55,32 @@ export function loadGhost(mapId: string): GhostRecording | null {
 
 export function saveGhost(ghost: GhostRecording): void {
   write(ghostKey(ghost.mapId), ghost);
+}
+
+const MAPS_KEY = 'cursar.maps';
+
+/** Hand-made maps saved in this browser, newest first. Anything unreadable is skipped. */
+export function loadMaps(): GameMap[] {
+  const raw = read<unknown[]>(MAPS_KEY);
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    const result = decodeMap(entry);
+    return result.ok ? [result.map] : [];
+  });
+}
+
+/** Saves a map (replacing `replaces`, the id it had before this edit, if given) and returns the map list. */
+export function saveMap(map: GameMap, replaces?: string): GameMap[] {
+  const rest = loadMaps().filter((m) => m.id !== map.id && m.id !== replaces);
+  const next = [map, ...rest];
+  write(MAPS_KEY, next.map((m): EncodedMap => encodeMap(m)));
+  return next;
+}
+
+export function deleteMap(id: string): GameMap[] {
+  const next = loadMaps().filter((m) => m.id !== id);
+  write(MAPS_KEY, next.map((m): EncodedMap => encodeMap(m)));
+  return next;
 }
 
 const ADJECTIVES = ['amber', 'brisk', 'crimson', 'dusty', 'eager', 'frosty', 'golden', 'hollow', 'ivory', 'jolly', 'keen', 'lunar', 'misty', 'nimble', 'opal', 'quiet', 'rapid', 'silver', 'tidal', 'vivid'];

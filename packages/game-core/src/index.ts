@@ -5,6 +5,7 @@ export * from './map/distance';
 export * from './map/validate';
 export * from './map/route';
 export * from './map/generate';
+export * from './map/edit';
 export * from './sim/types';
 export * from './sim/effects';
 export * from './sim/health';

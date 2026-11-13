@@ -1,13 +1,15 @@
-import { DEFAULT_CONFIG, MAP_SIZES, type MapSize, generateMap, previewSeconds } from '@cursar/game-core';
-import { useMemo } from 'react';
+import { DEFAULT_CONFIG, type GameMap, MAP_SIZES, type MapSize, generateMap, previewSeconds } from '@cursar/game-core';
+import { useMemo, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
-import { type Settings, formatTime, loadGhost, randomSeed } from '../storage';
+import { type Settings, deleteMap, formatTime, loadGhost, loadMaps, randomSeed } from '../storage';
 
 interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   onStart: () => void;
   onMultiplayer: () => void;
+  /** Opens the map editor on a saved map, or on a new blank one (null). */
+  onEditor: (map: GameMap | null) => void;
 }
 
 const SIZE_NOTES: Record<MapSize, string> = {
@@ -17,9 +19,12 @@ const SIZE_NOTES: Record<MapSize, string> = {
   large: 'Around 4–5 minutes',
 };
 
-export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
+export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor }: Props) {
   const seed = settings.seed.trim() || 'cursar';
-  const map = useMemo(() => generateMap({ seed, size: settings.size }), [seed, settings.size]);
+  const [myMaps, setMyMaps] = useState(() => loadMaps());
+  const custom = myMaps.find((m) => m.id === settings.mapId) ?? null;
+  const generated = useMemo(() => generateMap({ seed, size: settings.size }), [seed, settings.size]);
+  const map = custom ?? generated;
   const best = useMemo(() => loadGhost(map.id), [map.id]);
 
   return (
@@ -37,6 +42,29 @@ export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
         </header>
 
         <fieldset>
+          <legend>Map</legend>
+          <div className="map-source">
+            <select value={custom?.id ?? ''} onChange={(event) => onChange({ mapId: event.target.value })} aria-label="Map to race">
+              <option value="">A generated map (size and seed below)</option>
+              {myMaps.map((m) => <option key={m.id} value={m.id}>{m.name} (my map)</option>)}
+            </select>
+            <button type="button" onClick={() => onEditor(custom)}>{custom ? 'Edit this map' : 'Map editor'}</button>
+            {custom && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm(`Delete “${custom.name}”? This cannot be undone.`)) return;
+                  setMyMaps(deleteMap(custom.id));
+                  onChange({ mapId: '' });
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </fieldset>
+
+        {!custom && <><fieldset>
           <legend>Map size</legend>
           <div className="sizes">
             {(Object.keys(MAP_SIZES) as MapSize[]).map((size) => (
@@ -65,7 +93,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer }: Props) {
             </button>
           </div>
           <small>The same seed always gives the same map, so you can share it or come back to beat your time.</small>
-        </label>
+        </label></>}
 
         <dl className="facts">
           <div>

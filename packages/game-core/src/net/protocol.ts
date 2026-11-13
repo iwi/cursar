@@ -1,9 +1,14 @@
 import type { GameConfig } from '../config';
 import { MAP_SIZES, type MapSize } from '../map/generate';
+import { type EncodedMap, decodeMap } from '../map/edit';
+import type { GameMap } from '../map/types';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
+
+/** The longest message a client may send (a hand-made map); every other message must be under 2000 characters. */
+export const MAX_MAP_MESSAGE = 60000;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -78,6 +83,8 @@ export interface RoomInfo {
   players: RoomPlayer[];
   /** Races completed so far in the current series. */
   racesDone: number;
+  /** A hand-made map the host chose, raced instead of generated ones; null for generated maps. */
+  customMap: { id: string; name: string } | null;
 }
 
 /** Everything about a runner except identity and footprints: what the owner needs to predict movement. */
@@ -124,6 +131,8 @@ export type ClientMessage =
   | { t: 'hello'; v: number; name: string; color: number; room?: string; token?: string }
   | { t: 'profile'; name: string; color: number }
   | { t: 'settings'; settings: Partial<LobbySettings> }
+  /** Host, in the lobby: race this hand-made map (checked by the server), or null to go back to generated maps. */
+  | { t: 'map'; map: GameMap | null }
   /** Host: start the series, or the next race. */
   | { t: 'start' }
   /** Host: cancel the race or series and return everyone to the lobby. */
@@ -161,6 +170,8 @@ export type ServerMessage =
       /** Your start position. */
       slot: number;
       runners: { id: string; name: string; color: number }[];
+      /** A hand-made map, when the host chose one; otherwise everyone generates the map from the seed. */
+      map?: EncodedMap;
     }
   | {
       t: 'snap';
@@ -213,7 +224,8 @@ export function cleanSettings(raw: unknown): Partial<LobbySettings> {
  * anything malformed is dropped by returning null.
  */
 export function parseClientMessage(text: string): ClientMessage | null {
-  if (text.length > 2000) return null;
+  // Only a map may be long.
+  if (text.length > MAX_MAP_MESSAGE) return null;
   let m: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(text);
@@ -222,7 +234,13 @@ export function parseClientMessage(text: string): ClientMessage | null {
   } catch {
     return null;
   }
+  if (m.t !== 'map' && text.length > 2000) return null;
   switch (m.t) {
+    case 'map': {
+      if (m.map === null) return { t: 'map', map: null };
+      const result = decodeMap(m.map);
+      return result.ok ? { t: 'map', map: result.map } : null;
+    }
     case 'hello':
       if (!isNumber(m.v) || !isNumber(m.color)) return null;
       return {

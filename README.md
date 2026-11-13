@@ -69,6 +69,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 | Shove | `Space`: pushes a rival or an awake chaser in front of you (uses stamina) |
 | Take a skill card | `1` `2` `3` when cards are offered |
 
+- The **map editor** (from the menu) lets you make your own maps on the maze grid: open walls, place the start, finish, checkpoints, traps, coins, enemies and obstacles, then save, race, or export them as a file. Saved maps can be chosen in the menu, and by the host in a multiplayer room.
 - The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.
 - **Checkpoints** are the pink flags. The finish only counts once you have touched them all; the order is up to you.
 - You have **3 hearts**. A new checkpoint restores them; losing the last sends you back to the last checkpoint you touched.

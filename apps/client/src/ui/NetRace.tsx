@@ -1,4 +1,4 @@
-import { type GameMap, type RoomInfo, type ServerMessage, generateMap } from '@cursar/game-core';
+import { type GameMap, type RoomInfo, type ServerMessage, decodeMap, generateMap } from '@cursar/game-core';
 import { useEffect, useMemo } from 'react';
 import { NetDriver } from '../game/NetDriver';
 import type { Connection } from '../net/Connection';
@@ -21,8 +21,11 @@ interface Props {
 
 /** A race run by the server, plus the results table and the host's controls between races. */
 export function NetRace({ start, results, room, connection, settings, onChange, onLeave }: Props) {
-  // Everyone builds the same map from the seed the server chose.
-  const map = useMemo<GameMap>(() => generateMap({ seed: start.seed, size: start.size }), [start.seed, start.size]);
+  // Everyone builds the same map from the seed the server chose, unless the host chose a hand-made map.
+  const map = useMemo<GameMap>(() => {
+    const made = start.map ? decodeMap(start.map) : null;
+    return made?.ok ? made.map : generateMap({ seed: start.seed, size: start.size });
+  }, [start]);
   const isHost = room.hostId === connection.id;
   const hostName = room.players.find((p) => p.id === room.hostId)?.name ?? 'the host';
   const standings = results ? [...results.rows].sort((a, b) => b.pointsTotal - a.pointsTotal) : [];

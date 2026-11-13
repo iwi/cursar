@@ -1,4 +1,4 @@
-import { type ClientMessage, PLAYER_COLORS, PROTOCOL_VERSION, type RaceState, type ServerMessage, isSolid, parseClientMessage } from '@cursar/game-core';
+import { type ClientMessage, PLAYER_COLORS, PROTOCOL_VERSION, type RaceState, type ServerMessage, decodeMap, encodeMap, generateMap, isSolid, parseClientMessage } from '@cursar/game-core';
 import { describe, expect, it } from 'vitest';
 import { type Member, Room } from '../src/room';
 
@@ -675,5 +675,35 @@ describe('skills in a network race', () => {
   it('drops anything extra on an input, and a pick of a slot that does not exist', () => {
     expect(parseClientMessage('{"t":"input","seq":1,"mx":0,"my":0,"use":"teleport"}')).not.toHaveProperty('use');
     expect(parseClientMessage('{"t":"pick","slot":7}')).toBe(null);
+  });
+});
+
+describe('hand-made maps', () => {
+  it('lets the host pick a checked map for the room, raced and sent to everyone', () => {
+    const { room, clients } = setup();
+    const [ana, ben] = clients;
+    const made = { ...generateMap({ seed: 'hand', size: 'tiny' }), name: 'Ana’s loop' };
+    const wire = JSON.stringify({ t: 'map', map: encodeMap(made) });
+    const parsed = parseClientMessage(wire);
+    expect(parsed && parsed.t === 'map' && parsed.map?.name).toBe('Ana’s loop');
+    // Only the host may choose it.
+    ben!.send(parsed!);
+    expect(room.info().customMap).toBe(null);
+    ana!.send(parsed!);
+    expect(ben!.last('room').room.customMap?.name).toBe('Ana’s loop');
+    ana!.send({ t: 'start' });
+    expect(room.raceState!.map.tiles).toEqual(made.tiles);
+    const start = ben!.last('race');
+    expect(start.map && decodeMap(start.map).ok).toBe(true);
+    // Back to generated maps.
+    ana!.send({ t: 'lobby' });
+    ana!.send({ t: 'map', map: null });
+    expect(room.info().customMap).toBe(null);
+  });
+
+  it('drops a broken map, and a long message that is not a map', () => {
+    expect(parseClientMessage(JSON.stringify({ t: 'map', map: { schema: 1, width: 3 } }))).toBe(null);
+    expect(parseClientMessage(JSON.stringify({ t: 'profile', name: 'x'.repeat(5000), color: 0 }))).toBe(null);
+    expect(parseClientMessage('x'.repeat(70000))).toBe(null);
   });
 });

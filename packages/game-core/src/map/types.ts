@@ -36,7 +36,8 @@ export interface Rect {
   h: number;
 }
 
-export type LandmarkKind = 'fountain' | 'statue' | 'tree' | 'crystal' | 'brazier' | 'obelisk';
+export const LANDMARK_KINDS = ['fountain', 'statue', 'tree', 'crystal', 'brazier', 'obelisk'] as const;
+export type LandmarkKind = (typeof LANDMARK_KINDS)[number];
 
 export interface Landmark extends Point {
   kind: LandmarkKind;

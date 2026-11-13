@@ -164,6 +164,18 @@ Agreed for later phases:
 | Internet play | A single hosted server with room codes and no accounts. Code built 12 November: rooms, codes, removing players, a health check (`/health`), cache headers, a `Dockerfile`, and `TRUST_PROXY` for running behind the HTTPS proxy that hosting platforms provide (see `docs/DEPLOY.md`). Host chosen 12 November: Railway, building the `Dockerfile`, with its settings in `railway.json` (exactly one copy, never asleep, no overlap between old and new versions on deploy, health check on `/health`). Accounts and matchmaking stay late. Online since 12 November at https://cursarserver-production.up.railway.app (tested by the owner with players on different networks: works well). | Online |
 | Phaser version | Phaser 3.90, the final and most widely documented release of version 3. Version 4 exists; because rendering is kept separate from the game rules, moving later affects only `apps/client/src/game`. | Built |
 
+## 4a. Map editor
+
+Decided with the owner on 13 November and built the same day.
+
+- **Walls are drawn on maze cells**, the grid the generator uses: click or drag along the wall between two cells to open or close it, and click a corner post to join cells into a plaza. Corridors are therefore always two tiles wide.
+- **Start from a blank map** (5×5 to 30×22 cells; every cell walled off, the start plaza in the top-left corner, the finish in the far corner) **or from a generated map** by seed and size.
+- **Everything can be placed**: floor, mud and ice (per cell); the start plaza (2×2 cells, eight places); the finish; up to 12 checkpoints; landmarks (click again to change kind); traps of each kind (per tile); coins; chasers and turrets; patrollers (click their beat cell by cell along openings); boulders (two ends of a straight open corridor); gates (in an opening); barriers (round a landmark, either way). An eraser removes anything placed. Ctrl+Z undoes.
+- The editor shows whether the map is **raceable** (every checkpoint and the finish reachable from the start, with the shortest route length) and warns about odd things (no checkpoints, the finish in the start plaza). Only raceable maps can be saved, raced or exported.
+- **Saved in the browser** and listed in the menu's Map choice (with Edit and Delete) and in the multiplayer lobby. **Export file / Open file** share a map as a `.cursar.json` file. A hand-made map's id is a hash of its contents, so a best-run ghost belongs to the exact map; changing the map starts a fresh best.
+- **Multiplayer**: the host picks one of their maps in the lobby; the server checks it fully (`decodeMap`: every field, size limits, playability) before using it, and sends it to everyone with the race. Every race in the series is on that map.
+- Graphics in the editor are plain, like the rest, until the visual style is chosen.
+
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
@@ -171,7 +183,7 @@ Agreed for later phases:
 3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Played from different networks and it works well.*
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio. *Built 12 November: the effect system (six effects), health with checkpoint respawning, moving obstacles (boulders, barriers, gates), traps and enemies (patrollers, chasers, turrets). Phase 3 is complete apart from play-testing and tuning.*
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level. *Built 12 November: treasures, the skill deck and pick, threat. Deck trimmed after the first play test; Homing sense, Footing and the shove added 13 November. Phase 4 is complete apart from tuning.*
-6. **Phase 5: map editor.** Using the same map format the generator already produces.
+6. **Phase 5: map editor.** Using the same map format the generator already produces. *Built 13 November (see "Map editor" below).*
 7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts.
 8. **Phase 7–8: wider application, accounts, matchmaking, final graphics.**
 

@@ -1,5 +1,6 @@
 import { Rng } from '../rng';
-import { ENEMY_KINDS, type EnemySpawn, type GameMap, type Landmark, type LandmarkKind, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
+import { startPositionsAt } from './edit';
+import { ENEMY_KINDS, type EnemySpawn, type GameMap, LANDMARK_KINDS, type Landmark, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
@@ -41,7 +42,6 @@ export interface GenerateOptions {
 }
 
 const PITCH = 3;
-const LANDMARK_KINDS: LandmarkKind[] = ['fountain', 'statue', 'tree', 'crystal', 'brazier', 'obelisk'];
 const DIRS = [
   { dx: 1, dy: 0 },
   { dx: -1, dy: 0 },
@@ -142,13 +142,7 @@ export function generateMap(options: GenerateOptions): GameMap {
   reserve(startC, startR, startC + 1, startR + 1);
   const sx = startC * PITCH + 1;
   const sy = startR * PITCH + 1;
-  const startPositions: Point[] = [];
-  for (const oy of [1, 2.5, 4]) {
-    for (const ox of [1, 2.5, 4]) {
-      if (ox === 2.5 && oy === 2.5) continue;
-      startPositions.push({ x: sx + ox, y: sy + oy });
-    }
-  }
+  const startPositions = startPositionsAt(startC, startR);
 
   // 4. Landmark plazas: open rooms, each with a different feature in the middle.
   const landmarks: Landmark[] = [];
