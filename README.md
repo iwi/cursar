@@ -2,7 +2,7 @@
 
 A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
 
-It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, is in: effects, health, moving obstacles, traps and enemies. Phase 4 has begun: treasures and skills. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, is in: effects, health, moving obstacles, traps and enemies. Phase 4 (treasures, skills, the shove), Phase 5 (the map editor) and Phase 6 (recordings: several ghosts, ghost files, statistics) are in. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Run it
 
@@ -77,7 +77,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 - **Traps** are shown in the preview but hidden in the race until you are within about 2 tiles; listen for a faint tick. Spikes cost a heart; snares stun, glue slows, flashes blind and trick tiles scramble your controls. A sprung trap is safe for 10 seconds. Corridors are two tiles wide, so you can step round a trap you remember.
 - **Treasures and skills**: gold coins are worth a point each. Touch a checkpoint with points to spend and three skill cards appear; press `1`, `2` or `3` to take one without stopping. Skills last the race. Each card also adds threat: enemies go for high-threat runners first, and traps catch them more easily.
 - **Enemies**: purple patrollers walk a winding beat back and forth, turning corners (hug the wall to squeeze past; a touch costs a heart). Red chasers sleep until you come close, then chase you; break their line of sight to lose them (a catch costs a heart and stuns you). Turrets turn, whir and fire slow bolts that slow you; dodge or duck behind a wall. Listen: you hear each kind before you see it.
-- In a solo race, your best run on each map is saved in the browser and races alongside you as a white **ghost**.
+- In a solo race, a white **ghost** races alongside you: your best run on the map, unless you choose another in the menu. Your last few runs are kept too, and you can keep any finished runner's ghost from multiplayer results or open a ghost file a friend exported. After each run you get a summary (checkpoint times against your best, hearts lost, traps, distance); **Statistics** in the menu has your totals and a record per map. All of it is kept in the browser.
 - In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
 - A runner who has finished watches the rest of the race on the full map.
 - After a race the map is revealed with the route each runner took.

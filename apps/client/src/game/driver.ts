@@ -5,6 +5,8 @@ import {
   type GameMap,
   type GhostRecording,
   GhostRecorder,
+  RunTally,
+  type RunSummary,
   type RaceState,
   applyEffect,
   createRace,
@@ -26,6 +28,8 @@ export interface MoveIntent {
   sprint: boolean;
   /** Shove: set on the tick after its key was pressed. */
   shove?: true;
+  /** The full map is open (the runner stands still): counted in the run summary, never sent. */
+  peeking?: true;
 }
 
 export interface Rival {
@@ -121,6 +125,9 @@ export interface LocalResult {
   finished: boolean;
   time: number | null;
   recording: GhostRecording | null;
+  summary: RunSummary;
+  /** Seconds from the start to the end of the race. */
+  raceSeconds: number;
 }
 
 const LOCAL_ID = 'p1';
@@ -133,6 +140,7 @@ export class LocalDriver implements RaceDriver {
   readonly resultsLayout = 'top';
   paused = false;
   private recorder: GhostRecorder;
+  private tally = new RunTally(LOCAL_ID);
   private accumulator = 0;
   private prevX: number;
   private prevY: number;
@@ -143,7 +151,10 @@ export class LocalDriver implements RaceDriver {
   constructor(
     map: GameMap,
     config: GameConfig,
+    /** The ghost to race against, if any. */
     private readonly best: GhostRecording | null,
+    /** Your best time on this map, for the fanfare. */
+    private readonly bestTime: number | null,
     private readonly onResult: (result: LocalResult) => void,
     options: { color: number },
   ) {
@@ -169,8 +180,11 @@ export class LocalDriver implements RaceDriver {
       this.accumulator -= stepMs;
       this.prevX = this.me.x;
       this.prevY = this.me.y;
-      const input = { seq: ++this.seq, ...readIntent() };
-      for (const event of step(state, { [LOCAL_ID]: input })) {
+      const { peeking, ...intent } = readIntent();
+      const input = { seq: ++this.seq, ...intent };
+      const stepped = step(state, { [LOCAL_ID]: input });
+      this.tally.update(state, stepped, peeking === true);
+      for (const event of stepped) {
         if (event.type === 'foeCue') {
           // Heard as the runner hears it, like in network play.
           const heard = hearFoe(state, event, this.me);
@@ -179,7 +193,13 @@ export class LocalDriver implements RaceDriver {
         }
         events.push(event);
         if (event.type === 'phase' && event.phase === 'finished') {
-          this.onResult({ finished: this.me.finished, time: this.me.finishTime, recording: this.recorder.finish() });
+          this.onResult({
+            finished: this.me.finished,
+            time: this.me.finishTime,
+            recording: this.recorder.finish(),
+            summary: this.tally.summary,
+            raceSeconds: this.me.finishTime ?? state.raceTime,
+          });
         }
       }
       this.recorder.capture();
@@ -239,7 +259,7 @@ export class LocalDriver implements RaceDriver {
   }
 
   celebrate(event: Extract<GameEvent, { type: 'finish' }>): boolean {
-    return !this.best || event.time < this.best.time;
+    return this.bestTime === null || event.time < this.bestTime;
   }
 
   runnerName(): string {

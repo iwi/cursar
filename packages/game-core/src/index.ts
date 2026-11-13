@@ -18,5 +18,7 @@ export * from './sim/movement';
 export * from './sim/visibility';
 export * from './sim/race';
 export * from './replay/ghost';
+export * from './replay/files';
+export * from './replay/tally';
 export * from './net/protocol';
 export * from './sim/autopilot';

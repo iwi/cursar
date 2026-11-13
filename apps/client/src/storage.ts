@@ -1,4 +1,4 @@
-import { type EncodedMap, type GameMap, type GhostRecording, type MapSize, decodeMap, encodeMap } from '@cursar/game-core';
+import { type EncodedMap, type GameMap, type MapSize, decodeMap, encodeMap } from '@cursar/game-core';
 
 export interface Settings {
   size: MapSize;
@@ -20,10 +20,9 @@ export interface Settings {
 
 const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
 const SETTINGS_KEY = 'cursar.settings';
-const ghostKey = (mapId: string) => `cursar.ghost.${mapId}`;
 
 // Storage can be unavailable (private windows, blocked site data): the game must still run.
-function read<T>(key: string): T | null {
+export function read<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : null;
@@ -32,9 +31,19 @@ function read<T>(key: string): T | null {
   }
 }
 
-function write(key: string, value: unknown): void {
+/** Stores a value; false if the browser refused (storage full or blocked). */
+export function write(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function remove(key: string): void {
+  try {
+    localStorage.removeItem(key);
   } catch {
     /* ignore */
   }
@@ -46,15 +55,6 @@ export function loadSettings(): Settings {
 
 export function saveSettings(settings: Settings): void {
   write(SETTINGS_KEY, settings);
-}
-
-export function loadGhost(mapId: string): GhostRecording | null {
-  const ghost = read<GhostRecording>(ghostKey(mapId));
-  return ghost && ghost.format === 1 && ghost.mapId === mapId && Array.isArray(ghost.samples) ? ghost : null;
-}
-
-export function saveGhost(ghost: GhostRecording): void {
-  write(ghostKey(ghost.mapId), ghost);
 }
 
 const MAPS_KEY = 'cursar.maps';

@@ -1,7 +1,10 @@
 import { DEFAULT_CONFIG, type GameMap, MAP_SIZES, type MapSize, generateMap, previewSeconds } from '@cursar/game-core';
 import { useMemo, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
-import { type Settings, deleteMap, formatTime, loadGhost, loadMaps, randomSeed } from '../storage';
+import { bestRun, loadGhosts } from '../recordings';
+import { loadStats } from '../stats';
+import { type Settings, deleteMap, formatTime, loadMaps, randomSeed, saveMap } from '../storage';
+import { Ghosts } from './Ghosts';
 
 interface Props {
   settings: Settings;
@@ -10,6 +13,7 @@ interface Props {
   onMultiplayer: () => void;
   /** Opens the map editor on a saved map, or on a new blank one (null). */
   onEditor: (map: GameMap | null) => void;
+  onStats: () => void;
 }
 
 const SIZE_NOTES: Record<MapSize, string> = {
@@ -19,13 +23,28 @@ const SIZE_NOTES: Record<MapSize, string> = {
   large: 'Around 4–5 minutes',
 };
 
-export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor }: Props) {
+export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onStats }: Props) {
   const seed = settings.seed.trim() || 'cursar';
   const [myMaps, setMyMaps] = useState(() => loadMaps());
   const custom = myMaps.find((m) => m.id === settings.mapId) ?? null;
   const generated = useMemo(() => generateMap({ seed, size: settings.size }), [seed, settings.size]);
   const map = custom ?? generated;
-  const best = useMemo(() => loadGhost(map.id), [map.id]);
+  const record = useMemo(() => loadStats().maps[map.id] ?? null, [map.id]);
+  // Runs from before statistics were kept still have their ghost.
+  const bestTime = useMemo(() => {
+    const times = [record?.best, bestRun(loadGhosts(map.id))?.ghost.time].filter((t): t is number => typeof t === 'number');
+    return times.length ? Math.min(...times) : null;
+  }, [map.id, record]);
+
+  /** Shows a map that came with a ghost file: a generated one by its seed, a hand-made one added to My maps. */
+  const openMap = (opened: GameMap) => {
+    if (opened.generator) {
+      onChange({ mapId: '', seed: opened.generator.seed, size: opened.generator.size as MapSize });
+      return;
+    }
+    if (!myMaps.some((m) => m.id === opened.id)) setMyMaps(saveMap(opened));
+    onChange({ mapId: opened.id });
+  };
 
   return (
     <main className="menu">
@@ -106,9 +125,25 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor }: P
           </div>
           <div>
             <dt>Your best</dt>
-            <dd>{best ? formatTime(best.time) : 'Not run yet'}</dd>
+            <dd>{bestTime !== null ? formatTime(bestTime) : 'Not run yet'}</dd>
           </div>
+          {record && record.runs > 0 && (
+            <>
+              <div>
+                <dt>Finished</dt>
+                <dd>{record.finishes} of {record.runs} runs</dd>
+              </div>
+              {record.finishes > 0 && (
+                <div>
+                  <dt>Average</dt>
+                  <dd>{formatTime(record.totalTime / record.finishes)}</dd>
+                </div>
+              )}
+            </>
+          )}
         </dl>
+
+        <Ghosts map={map} onOpenMap={openMap} />
 
         <label className="check">
           <input type="checkbox" checked={settings.finishArrow} onChange={(event) => onChange({ finishArrow: event.target.checked })} />
@@ -129,7 +164,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor }: P
 
         <button type="submit" className="primary">Start solo race</button>
         <button type="button" className="secondary" onClick={onMultiplayer}>Play with friends</button>
-        {best && <p className="hint">In a solo race, your best run on this map races alongside you as a ghost.</p>}
+        <button type="button" className="secondary" onClick={onStats}>Statistics</button>
 
         <table className="keys">
           <tbody>

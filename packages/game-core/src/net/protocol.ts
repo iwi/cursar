@@ -5,7 +5,7 @@ import type { GameMap } from '../map/types';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 /** The longest message a client may send (a hand-made map); every other message must be under 2000 characters. */
 export const MAX_MAP_MESSAGE = 60000;

@@ -333,7 +333,7 @@ export class RaceScene extends Phaser.Scene {
     // Looking at the full map costs time: the runner cannot move meanwhile.
     if (this.peeking()) {
       this.pendingShove = false;
-      return { mx: 0, my: 0, sprint: false };
+      return { mx: 0, my: 0, sprint: false, peeking: true };
     }
     if (this.autopilot) {
       const { mx, my, sprint } = this.autopilot(this.me());

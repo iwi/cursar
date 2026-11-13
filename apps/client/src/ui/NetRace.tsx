@@ -1,8 +1,10 @@
-import { type GameMap, type RoomInfo, type ServerMessage, decodeMap, generateMap } from '@cursar/game-core';
-import { useEffect, useMemo } from 'react';
+import { type GameMap, MAP_SIZES, type ResultRow, type RoomInfo, type ServerMessage, decodeMap, generateMap, ghostFromRoute, routeDistance } from '@cursar/game-core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NetDriver } from '../game/NetDriver';
 import type { Connection } from '../net/Connection';
-import { type Settings, formatTime } from '../storage';
+import { addGhost } from '../recordings';
+import { recordRace } from '../stats';
+import { type Settings, formatTime, loadMaps, saveMap } from '../storage';
 import { hex } from './Race';
 import { RaceView } from './RaceView';
 
@@ -31,6 +33,42 @@ export function NetRace({ start, results, room, connection, settings, onChange, 
   const standings = results ? [...results.rows].sort((a, b) => b.pointsTotal - a.pointsTotal) : [];
   const series = start.racesTotal > 1;
   const racing = room.stage === 'race';
+  const [ghostSaved, setGhostSaved] = useState<Record<string, 'saved' | 'full'>>({});
+  const routeSeconds = start.config.ghost.routeEveryTicks / start.config.tickRate;
+
+  // Your statistics: each results table is counted once.
+  const counted = useRef<Results | null>(null);
+  useEffect(() => {
+    setGhostSaved({});
+    if (!results || counted.current === results) return;
+    counted.current = results;
+    const mine = results.rows.find((row) => row.id === connection.id);
+    if (!mine) return;
+    recordRace(map, {
+      place: mine.place,
+      time: mine.time,
+      raceSeconds: mine.time ?? (mine.track.length / 2) * routeSeconds,
+      distance: routeDistance(mine.track),
+    });
+  }, [results, connection.id, map, routeSeconds]);
+
+  /** Keeps a runner's route as a ghost to race in solo. */
+  const saveGhost = (row: ResultRow) => {
+    if (row.time === null) return;
+    const ghost = ghostFromRoute(row.track, {
+      mapId: map.id,
+      mapVersion: map.version,
+      playerName: row.name,
+      time: row.time,
+      intervalMs: routeSeconds * 1000,
+    });
+    if (!ghost) return;
+    // A hand-made map goes into My maps, so the ghost can be raced.
+    if (!map.generator && !loadMaps().some((m) => m.id === map.id)) saveMap(map);
+    const { saved } = addGhost(map, ghost, 'race');
+    setGhostSaved((current) => ({ ...current, [row.id]: saved ? 'saved' : 'full' }));
+  };
+  const savedAny = Object.values(ghostSaved).includes('saved');
 
   // The host can freeze the race for everyone with Esc.
   useEffect(() => {
@@ -109,6 +147,7 @@ export function NetRace({ start, results, room, connection, settings, onChange, 
                     <th>Time</th>
                     <th>Points</th>
                     {series && <th>Total</th>}
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -122,11 +161,30 @@ export function NetRace({ start, results, room, connection, settings, onChange, 
                       <td>{row.time !== null ? formatTime(row.time) : `Did not finish (${row.checkpoints}/${map.checkpoints.length})`}</td>
                       <td>+{row.pointsGained}</td>
                       {series && <td>{row.pointsTotal}</td>}
+                      <td>
+                        {row.time !== null && row.track.length >= 4 && (
+                          ghostSaved[row.id] === 'saved' ? (
+                            <span className="tag">Ghost kept</span>
+                          ) : ghostSaved[row.id] === 'full' ? (
+                            <span className="tag bad">Storage full</span>
+                          ) : (
+                            <button type="button" className="small" title="Keep this run as a ghost to race in solo" onClick={() => saveGhost(row)}>
+                              Keep ghost
+                            </button>
+                          )
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="hint">The lines on the map show the route each runner took.</p>
+              {savedAny && (
+                <p className="hint">
+                  To race a kept ghost, choose this map in the solo menu
+                  {map.generator ? ` (${MAP_SIZES[start.size].label}, seed “${start.seed}”)` : ' (it is in My maps)'}, or from Statistics.
+                </p>
+              )}
               {isHost ? (
                 <div className="actions">
                   <button type="button" className="primary" onClick={() => connection.send({ t: 'start' })} autoFocus>

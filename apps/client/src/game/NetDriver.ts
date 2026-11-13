@@ -198,7 +198,8 @@ export class NetDriver implements RaceDriver {
         this.prevX = me.x;
         this.prevY = me.y;
         if (!me.finished) {
-          const input: PlayerInput = { seq: ++this.seq, ...readIntent() };
+          const { peeking: _peeking, ...intent } = readIntent();
+          const input: PlayerInput = { seq: ++this.seq, ...intent };
           this.pending.push(input);
           if (this.pending.length > 120) this.pending.splice(0, 60);
           this.connection.send({ t: 'input', seq: input.seq, mx: input.mx, my: input.my, sprint: input.sprint, ...(input.shove ? { shove: true as const } : {}) });

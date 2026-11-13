@@ -1,4 +1,4 @@
-import { type GameConfig, type GameMap, cloneConfig, generateMap } from '@cursar/game-core';
+import { type GameConfig, type GameMap, MAP_SIZES, type MapSize, cloneConfig, generateMap } from '@cursar/game-core';
 import { useMemo, useState } from 'react';
 import { audio } from './audio/AudioEngine';
 import { type Settings, loadMaps, loadSettings, randomSeed, saveSettings } from './storage';
@@ -6,6 +6,7 @@ import { Editor } from './ui/Editor';
 import { Menu } from './ui/Menu';
 import { Multiplayer, roomFromAddress } from './ui/Multiplayer';
 import { Race } from './ui/Race';
+import { Statistics } from './ui/Statistics';
 
 /** The editor's open map, kept while a test race runs so the editor comes back as it was. */
 interface Editing {
@@ -20,6 +21,7 @@ export function App() {
   });
   const [racing, setRacing] = useState<{ map: GameMap; attempt: number; custom: boolean } | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [showStats, setShowStats] = useState(false);
   // Opening a shared room link goes straight to that room.
   const [online, setOnline] = useState(() => roomFromAddress() !== '');
   // One config object for the session, so live tuning carries over between races.
@@ -87,12 +89,30 @@ export function App() {
     );
   }
 
+  if (showStats) {
+    return (
+      <Statistics
+        onBack={() => setShowStats(false)}
+        onRace={(id, record) => {
+          if (record.seed && record.size in MAP_SIZES) update({ mapId: '', seed: record.seed, size: record.size as MapSize });
+          else if (loadMaps().some((m) => m.id === id)) update({ mapId: id });
+          else {
+            window.alert('That map is no longer saved in this browser.');
+            return;
+          }
+          setShowStats(false);
+        }}
+      />
+    );
+  }
+
   return (
     <Menu
       settings={settings}
       onChange={update}
       onStart={() => start()}
       onEditor={(map) => setEditing({ map, savedId: map?.id ?? null })}
+      onStats={() => setShowStats(true)}
       onMultiplayer={() => {
         unlockAudio(settings);
         setOnline(true);

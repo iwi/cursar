@@ -502,7 +502,7 @@ export class Room {
       // Everything else concerns one runner only, and that runner's client predicts it.
     }
 
-    if (state.phase === 'racing' && state.raceTicks % 6 === 0) {
+    if (state.phase === 'racing' && state.raceTicks % state.config.ghost.routeEveryTicks === 0) {
       state.players.forEach((p, i) => {
         if (!p.finished || p.finishTime === state.raceTime) race.racers[i]!.track.push(round(p.x, 10), round(p.y, 10));
       });

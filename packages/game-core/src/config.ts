@@ -57,6 +57,12 @@ export interface GameConfig {
   ghost: {
     /** Record one sample every N ticks (3 ticks at 60 Hz = 50 ms). */
     sampleEveryTicks: number;
+    /** The server records each runner's route every N ticks (6 at 60 Hz = 100 ms); routes can be saved as ghosts. */
+    routeEveryTicks: number;
+    /** Your own finished runs kept per map, besides your best and any you pin. */
+    keepRecent: number;
+    /** Other runners' ghosts (from races and files) kept per map. */
+    keepOthers: number;
   };
   /** Moving obstacles. Where they are comes from the map; how they move is set here. */
   obstacles: {
@@ -217,7 +223,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
-  ghost: { sampleEveryTicks: 3 },
+  ghost: { sampleEveryTicks: 3, routeEveryTicks: 6, keepRecent: 5, keepOthers: 20 },
   obstacles: {
     boulder: { radius: 0.9, speed: 3 },
     barrier: { armLength: 2, thickness: 0.3, turnSeconds: 4 },

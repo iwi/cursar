@@ -288,3 +288,36 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .editor-maps button { width: 100%; text-align: left; padding: 5px 8px; font-size: 14px; }
 .editor-new .row { display: flex; gap: 8px; margin-top: 0; }
 .editor-new .row .field { flex: 1; }
+
+/* Recordings: ghosts, run summary, statistics */
+.ghosts .hint { margin: 8px 0 0; text-align: left; }
+.hint.bad { color: var(--bad); }
+.tag.bad { color: var(--bad); border-color: var(--bad); }
+.ghost-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.ghost-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: #1a1f2b; border-radius: 8px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+.ghost-list li.hint { background: none; padding: 0; display: block; }
+.ghost-list li small { display: block; color: var(--muted); }
+.ghost-list .tag { margin-left: 6px; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.row-actions button, button.small { padding: 4px 8px; font-size: 13px; }
+.run-report { display: grid; gap: 10px; margin: 4px 0; }
+.run-report .facts { grid-template-columns: repeat(3, 1fr); }
+.splits { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin: 0 auto; }
+.splits th { text-align: left; color: var(--muted); font-weight: 600; padding: 2px 10px 2px 0; }
+.splits td { padding: 2px 8px; text-align: right; }
+.splits .good { color: var(--good); }
+.splits .bad { color: var(--bad); }
+.stats .totals { grid-template-columns: repeat(2, 1fr); }
+.map-records { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.map-records th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 0 6px 4px 0; }
+.map-records td { padding: 6px 6px 6px 0; border-top: 1px solid var(--panel-edge); overflow-wrap: anywhere; }
+.map-records button { padding: 4px 8px; font-size: 13px; }
+@media (max-width: 640px) {
+  .run-report .facts, .stats .totals { grid-template-columns: 1fr 1fr; }
+  .splits { font-size: 12px; }
+}
+.results .run-report, .results .panel > .delta { grid-column: 1 / -1; }
+.results .run-report { width: min(600px, calc(100vw - 80px)); justify-self: center; }
+.results .run-report .facts { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.results .run-report .facts div { padding: 6px 8px; }
+.results .run-report .facts dt { font-size: 12px; }

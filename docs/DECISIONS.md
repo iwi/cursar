@@ -157,7 +157,7 @@ Agreed for later phases:
 | Stalled pages | If a page stops sending moves for a quarter of a second (a background tab, a frozen page), the server stops that runner rather than repeating its last move. This is also why the earlier demo tab kept running into walls. | Built |
 | Reconnection | A dropped or reloaded page gets its place back (including mid-race) for 30 seconds. | Built |
 | Deployment | `npm start` serves the page and the connection from one port, so local, network and later internet play differ only in the address. | Built |
-| Ghosts | Position tracks sampled every 50 ms, not input replays. About 25 KB per minute, played back identically anywhere. | Built |
+| Ghosts | Position tracks sampled every 50 ms, not input replays, played back identically anywhere. Stored and shared packed (hundredths of a tile, each value as the change from the last, in base 36): roughly a third of plain JSON. Ghosts made from multiplayer routes are sampled every 100 ms (`config.ghost.routeEveryTicks`), with facing worked out from the direction of travel. | Built |
 | Storage | Browser storage for settings and best runs. SQLite waits until profiles and statistics. | Built |
 | Events | The simulation reports what happened (footstep, bump, finish and so on) as events. Audio and effects listen to them. | Built |
 | Effect system | `sim/effects.ts`: `applyEffect` starts one (with the stacking and guard rules), effects count down inside `step`, and they change the input (`controlledInput`), top speed (`effectSpeedMul`) and vision (`effectiveVision`). Effects travel with the runner's own state to its page; rivals in view carry a list of their effects' kinds. Nothing on the maps applies them yet: that is the hazards' job. | Built |
@@ -176,6 +176,17 @@ Decided with the owner on 13 November and built the same day.
 - **Multiplayer**: the host picks one of their maps in the lobby; the server checks it fully (`decodeMap`: every field, size limits, playability) before using it, and sends it to everyone with the race. Every race in the series is on that map.
 - Graphics in the editor are plain, like the rest, until the visual style is chosen.
 
+## 4b. Recordings (Phase 6)
+
+Decided with the owner on 13 November and built the same day.
+
+- **Kept per map, in the browser:** your best run, your last 5 finished runs (`config.ghost.keepRecent`), up to 20 ghosts from other people (`keepOthers`), and anything you pin. The rest are dropped as newer runs come in. Ghosts can be renamed, pinned, exported and deleted from the menu (Ghost → Manage). The best run saved by earlier versions is brought over.
+- **One ghost at a time in solo**, chosen in the menu: your best run (the default), any kept ghost, or none. The fanfare is still for beating your own best, whichever ghost you raced.
+- **Other people's ghosts** come from **multiplayer results** ("Keep ghost" on any runner who finished: the route the server already sends at the end becomes a ghost; a hand-made map is added to My maps so it can be raced) and from **ghost files** (`.cursar-ghost.json`, carrying the map: a generated map by seed and size, any other map whole). A file is checked fully (`decodeGhostFile`) and refused if the ghost does not belong to the map it carries, for example after a generator change.
+- **Run summary** after each solo run: distance, hearts lost, respawns, traps sprung, hits, time with the full map open, your average before this run, and each checkpoint time against your best run's (ghosts now record checkpoint times).
+- **Statistics** (menu → Statistics): totals (solo runs and finishes, races with friends, finishes and wins, time racing, distance, hearts lost, traps sprung, time with the map open, favourite map size) and a record per map (runs, finishes, best, average) with a button to choose that map. Runs ended by restarting or leaving are not counted. **Clear statistics** keeps ghosts and maps.
+- Not built: a server leaderboard (it would need storage that survives redeploys, and there are no accounts).
+
 ## 5. Revised roadmap
 
 1. **Phase 0–1: single-player prototype.** Done in this project, including seeded random maps, a ghost of your best run, waypoints, stamina and audio. *Now: play it and tune the feel.*
@@ -184,7 +195,7 @@ Decided with the owner on 13 November and built the same day.
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio. *Built 12 November: the effect system (six effects), health with checkpoint respawning, moving obstacles (boulders, barriers, gates), traps and enemies (patrollers, chasers, turrets). Phase 3 is complete apart from play-testing and tuning.*
 5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level. *Built 12 November: treasures, the skill deck and pick, threat. Deck trimmed after the first play test; Homing sense, Footing and the shove added 13 November. Phase 4 is complete apart from tuning.*
 6. **Phase 5: map editor.** Using the same map format the generator already produces. *Built 13 November (see "Map editor" below).*
-7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts.
+7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts. *Built 13 November (see "Recordings" above).*
 8. **Phase 7–8: wider application, accounts, matchmaking, final graphics.**
 
 ## 6. Open questions

@@ -18,10 +18,13 @@ export interface GhostRecording {
   recordedAt: string;
   /** Flat x, y, facing triples, one per interval, starting at race time 0. */
   samples: number[];
+  /** Race times at which each checkpoint was touched, in the order touched (absent in older ghosts). */
+  splits?: number[];
 }
 
 export class GhostRecorder {
   private samples: number[] = [];
+  private splits: number[] = [];
   private lastTick = -1;
 
   constructor(
@@ -33,6 +36,8 @@ export class GhostRecorder {
   capture(): void {
     const { state } = this;
     if (state.phase !== 'racing' && state.phase !== 'finished') return;
+    const touched = this.player().checkpoints.filter(Boolean).length;
+    while (this.splits.length < touched) this.splits.push(round(state.raceTime));
     if (state.raceTicks === this.lastTick || state.raceTicks % state.config.ghost.sampleEveryTicks !== 0) return;
     this.lastTick = state.raceTicks;
     const p = this.player();
@@ -59,6 +64,7 @@ export class GhostRecorder {
       intervalMs: (1000 * state.config.ghost.sampleEveryTicks) / state.config.tickRate,
       recordedAt: new Date().toISOString(),
       samples: this.samples,
+      splits: this.splits,
     };
   }
 
