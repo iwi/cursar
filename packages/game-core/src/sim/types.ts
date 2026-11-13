@@ -90,6 +90,8 @@ export interface PlayerState {
   homingTime: number;
   /** Seconds left before the runner can shove again. */
   shoveCooldown: number;
+  /** Seconds left in which the current shove still hits what enters its cone. */
+  shoveTime: number;
   /** Trap sense: the armed trap the runner stepped on and the race time it clicked, or null. */
   trapClick: { index: number; at: number } | null;
   finished: boolean;

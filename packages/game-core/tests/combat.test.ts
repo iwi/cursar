@@ -77,6 +77,23 @@ describe('the shove', () => {
     expect(run(state, { a: shove, b: still }, 1 / 60).some((e) => e.type === 'shove')).toBe(false);
   });
 
+  it('stays active for a moment, so a shove a little early still catches a charging chaser', () => {
+    const { state, b } = race({ ...ROOM, enemies: [{ kind: 'chaser', x: 14.5, y: 3.5 }] });
+    b.finished = true;
+    const chaser = state.foes[0] as ChaserState;
+    chaser.mode = 'chase';
+    chaser.target = 'a';
+    // Out of reach when Ana shoves, charging straight at her.
+    chaser.x = 5 + config.player.radius + config.enemies.chaser.radius + config.combat.reach + 0.6;
+    chaser.y = 2.5;
+    run(state, { a: shove, b: still }, 1 / 60);
+    expect(chaser.stun).toBe(0);
+    const events = run(state, { a: still, b: still }, config.combat.activeSeconds);
+    expect(events).toContainEqual({ type: 'shoveHit', playerId: 'a', target: 'chaser' });
+    expect(events.some((e) => e.type === 'enemyHit')).toBe(false);
+    expect(chaser.stun).toBeGreaterThan(0);
+  });
+
   it('stuns a chasing chaser, which then goes home to rest', () => {
     const { state, b } = race({ ...ROOM, enemies: [{ kind: 'chaser', x: 14.5, y: 3.5 }] });
     b.x = 14;

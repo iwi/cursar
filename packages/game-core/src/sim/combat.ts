@@ -11,11 +11,13 @@ import type { GameEvent, PlayerInput, PlayerState, RaceState } from './types';
 export function startShove(state: RaceState, p: PlayerState, input: PlayerInput, dt: number, events: GameEvent[]): void {
   const cfg = state.config.combat;
   p.shoveCooldown = Math.max(0, p.shoveCooldown - dt);
+  p.shoveTime = Math.max(0, p.shoveTime - dt);
   if (!input.shove || p.shoveCooldown > 0 || p.finished || p.stamina < cfg.staminaCost) return;
   if (p.effects.some((e) => e.kind === 'stun')) return;
   p.stamina -= cfg.staminaCost;
   p.regenDelay = state.config.sprint.regenDelay;
   p.shoveCooldown = cfg.cooldownSeconds;
+  p.shoveTime = cfg.activeSeconds;
   events.push({ type: 'shove', playerId: p.id });
 }
 
@@ -35,16 +37,16 @@ function inCone(state: RaceState, p: PlayerState, x: number, y: number, r: numbe
 }
 
 /**
- * What this tick's shoves hit: rivals in the cone are knocked back and
- * briefly stunned (no heart; not during their safe time or just after a
- * knock), chasers in the cone are stunned and then go home to rest.
- * Patrollers and turrets cannot be shoved.
+ * What the shoves under way hit this tick. A shove stays active for
+ * `activeSeconds`, hitting whatever enters its cone: rivals are knocked back
+ * and briefly stunned (no heart; not during their safe time or just after a
+ * knock, which also stops one shove hitting twice), awake chasers are dazed
+ * and then go home to rest. Patrollers and turrets cannot be shoved.
  */
-export function resolveShoves(state: RaceState, shovers: string[], events: GameEvent[]): void {
+export function resolveShoves(state: RaceState, events: GameEvent[]): void {
   const { config } = state;
-  for (const id of shovers) {
-    const p = state.players.find((pl) => pl.id === id);
-    if (!p || p.finished) continue;
+  for (const p of state.players) {
+    if (p.finished || p.shoveTime <= 0) continue;
     for (const rival of state.players) {
       if (rival === p || rival.finished || rival.safeTime > 0 || rival.hitGuard > 0) continue;
       const n = inCone(state, p, rival.x, rival.y, config.player.radius);

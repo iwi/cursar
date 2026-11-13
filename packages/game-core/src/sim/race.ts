@@ -83,6 +83,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         revealTime: 0,
         homingTime: 0,
         shoveCooldown: 0,
+        shoveTime: 0,
         trapClick: null,
         finished: false,
         finishTime: null,
@@ -178,7 +179,6 @@ export function step(state: RaceState, inputs: Record<string, PlayerInput>): Gam
   state.raceTicks++;
   state.raceTime = state.raceTicks / config.tickRate;
 
-  const firstEvent = events.length;
   for (const p of state.players) {
     if (p.finished) continue;
     const input = inputs[p.id] ?? NO_INPUT;
@@ -186,8 +186,7 @@ export function step(state: RaceState, inputs: Record<string, PlayerInput>): Gam
     stepPlayer(state, p, input, dt, events);
   }
   // Shoves hit other runners and chasers, so they are settled here and never predicted.
-  const shovers = events.slice(firstEvent).flatMap((e) => (e.type === 'shove' ? [e.playerId] : []));
-  if (shovers.length > 0) resolveShoves(state, shovers, events);
+  resolveShoves(state, events);
   stepEnemies(state, dt, events);
 
   if (state.players.every((p) => p.finished) || state.raceTime >= state.deadline) {

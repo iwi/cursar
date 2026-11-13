@@ -961,7 +961,7 @@ export class RaceScene extends Phaser.Scene {
     g.fillStyle(mine, alpha).fillCircle(x, y, r * scale);
     g.fillStyle(0xffffff, alpha).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
     // A shove: a short white swipe across the cone in front.
-    const swipe = (this.time.now - this.shoveAt) / 180;
+    const swipe = (this.time.now - this.shoveAt) / (state.config.combat.activeSeconds * 1000);
     if (swipe >= 0 && swipe < 1) {
       const reach = (state.config.player.radius * 2 + state.config.combat.reach) * PX;
       g.lineStyle(4, 0xffffff, 1 - swipe);
