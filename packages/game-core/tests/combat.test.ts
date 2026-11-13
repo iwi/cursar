@@ -23,6 +23,8 @@ function race(map: GameMap = ROOM) {
   ]);
   skipPreview(state);
   while (state.phase !== 'racing') step(state, {});
+  // Past the start, when shoving is not allowed yet.
+  while (state.raceTime < config.combat.startGraceSeconds) step(state, {});
   const [a, b] = state.players as [typeof state.players[0], typeof state.players[0]];
   // Ana at (5, 2.5) facing right; Ben just in front of her.
   a.x = 5;
@@ -68,6 +70,18 @@ describe('the shove', () => {
     run(state, { a: shove, b: still }, 1 / 60);
     expect(run(state, { a: shove, b: still }, 1 / 60).some((e) => e.type === 'shove')).toBe(false);
     run(state, { a: still, b: still }, config.combat.cooldownSeconds);
+    expect(run(state, { a: shove, b: still }, 1 / 60).some((e) => e.type === 'shove')).toBe(true);
+  });
+
+  it('is not allowed in the first seconds of the race', () => {
+    const state = createRace(ROOM, [
+      { id: 'a', name: 'Ana', color: 0, slot: 0 },
+      { id: 'b', name: 'Ben', color: 1, slot: 1 },
+    ]);
+    skipPreview(state);
+    while (state.phase !== 'racing') step(state, {});
+    expect(run(state, { a: shove, b: still }, 1 / 60).some((e) => e.type === 'shove')).toBe(false);
+    run(state, { a: still, b: still }, config.combat.startGraceSeconds);
     expect(run(state, { a: shove, b: still }, 1 / 60).some((e) => e.type === 'shove')).toBe(true);
   });
 

@@ -1321,7 +1321,7 @@ export class RaceScene extends Phaser.Scene {
       raceTime: me.finishTime ?? state.raceTime,
       timeLeft: state.deadline - state.raceTime,
       stamina: me.stamina / state.config.sprint.staminaMax,
-      shoveReady: state.phase === 'racing' && !me.finished && me.shoveCooldown <= 0 && me.stamina >= state.config.combat.staminaCost,
+      shoveReady: state.phase === 'racing' && state.raceTime >= state.config.combat.startGraceSeconds && !me.finished && me.shoveCooldown <= 0 && me.stamina >= state.config.combat.staminaCost,
       exhausted: me.exhausted,
       sprinting: me.sprinting,
       markersPlaced: me.markers.length,

@@ -656,6 +656,8 @@ describe('skills in a network race', () => {
   it('shoves once even when the page falls behind, and tells the rival', () => {
     const { room, clients } = startRacing();
     const [ana, ben] = clients;
+    // Shoving starts a few seconds into the race.
+    while (room.raceState!.raceTime < room.raceState!.config.combat.startGraceSeconds) room.tick();
     const [a, b] = room.raceState!.players;
     a!.safeTime = 0;
     b!.safeTime = 0;

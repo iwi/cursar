@@ -3,8 +3,8 @@ import { knock } from './obstacles';
 import type { GameEvent, PlayerInput, PlayerState, RaceState } from './types';
 
 /**
- * Starts a shove if the runner pressed the key, is off cooldown, is not
- * stunned and has the stamina: spends it and reports a `shove`. Runs in
+ * Starts a shove if the runner pressed the key, the start's grace time is
+ * over, they are off cooldown, not stunned and have the stamina: spends it and reports a `shove`. Runs in
  * `stepPlayer`, so a page predicts its own shove; what it hits is decided
  * by `resolveShoves`, on the server only.
  */
@@ -13,6 +13,8 @@ export function startShove(state: RaceState, p: PlayerState, input: PlayerInput,
   p.shoveCooldown = Math.max(0, p.shoveCooldown - dt);
   p.shoveTime = Math.max(0, p.shoveTime - dt);
   if (!input.shove || p.shoveCooldown > 0 || p.finished || p.stamina < cfg.staminaCost) return;
+  // Not in the first seconds of the race, while everyone leaves the start together.
+  if (state.raceTime < cfg.startGraceSeconds) return;
   if (p.effects.some((e) => e.kind === 'stun')) return;
   p.stamina -= cfg.staminaCost;
   p.regenDelay = state.config.sprint.regenDelay;
