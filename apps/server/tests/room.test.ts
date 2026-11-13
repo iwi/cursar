@@ -592,7 +592,7 @@ describe('enemies in a network race', () => {
     const pb = state.players[1]!;
     // A chaser right beside Ana; Ben far off.
     state.map.enemies = [{ kind: 'chaser', x: pa.x, y: pa.y }];
-    state.foes = [{ kind: 'chaser', x: pa.x, y: pa.y, facing: 0, mode: 'chase', target: pa.id, lastX: pa.x, lastY: pa.y, timer: 2, cue: 0 }];
+    state.foes = [{ kind: 'chaser', x: pa.x, y: pa.y, facing: 0, mode: 'chase', target: pa.id, lastX: pa.x, lastY: pa.y, timer: 2, cue: 0, stun: 0 }];
     // Ben on open floor at least 25 tiles away.
     const far = state.map.tiles.findIndex((_t, i) => {
       const x = (i % state.map.width) + 0.5;
@@ -651,6 +651,23 @@ describe('skills in a network race', () => {
     ticks(room, 3);
     expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).map((e) => e.type)).toContain('skill');
     expect(ana!.last('snap').you.skills).toEqual(['steady']);
+  });
+
+  it('shoves once even when the page falls behind, and tells the rival', () => {
+    const { room, clients } = startRacing();
+    const [ana, ben] = clients;
+    const [a, b] = room.raceState!.players;
+    a!.safeTime = 0;
+    b!.safeTime = 0;
+    b!.x = a!.x + Math.cos(a!.facing) * 0.8;
+    b!.y = a!.y + Math.sin(a!.facing) * 0.8;
+    ana!.send({ t: 'input', seq: 1000, mx: 0, my: 0, sprint: false, shove: true });
+    ticks(room, 5);
+    const staminaAfterOne = room.raceState!.players[0]!.stamina;
+    expect(staminaAfterOne).toBeLessThan(room.raceState!.config.sprint.staminaMax);
+    expect(ana!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).map((e) => e.type)).toContain('shoveHit');
+    expect(ben!.inbox.flatMap((m) => (m.t === 'snap' ? m.events : [])).map((e) => e.type)).toContain('shoved');
+    expect(parseClientMessage('{"t":"input","seq":1,"mx":0,"my":0,"shove":"yes"}')).not.toHaveProperty('shove');
   });
 
   it('drops anything extra on an input, and a pick of a slot that does not exist', () => {

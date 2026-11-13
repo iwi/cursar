@@ -38,7 +38,10 @@ export function movePlayer(
   blocked: ((tx: number, ty: number) => boolean) | null = null,
 ): number {
   const { mx, my, active } = inputVector(input);
-  const terrain = TERRAIN[tileAt(map, Math.floor(p.x), Math.floor(p.y))]!;
+  const ground = TERRAIN[tileAt(map, Math.floor(p.x), Math.floor(p.y))]!;
+  // Footing: mud slows you, and mud and ice take your grip, only half as much.
+  const k = p.skills.includes('footing') ? config.skills.footingMul : 1;
+  const terrain = { speedMul: ground.speedMul < 1 ? 1 - (1 - ground.speedMul) * k : ground.speedMul, grip: 1 - (1 - ground.grip) * k };
   const top =
     config.player.maxSpeed * terrain.speedMul * (p.sprinting ? config.sprint.speedMul : 1) * effectSpeedMul(config, p);
 

@@ -2,7 +2,7 @@ import type { GameConfig } from '../config';
 import { Rng } from '../rng';
 import type { GameEvent, PlayerState, RaceState } from './types';
 
-export type SkillId = 'trapSense' | 'reveal' | 'deepLungs' | 'tough' | 'steady';
+export type SkillId = 'trapSense' | 'reveal' | 'homing' | 'footing' | 'deepLungs' | 'tough' | 'steady';
 
 export interface SkillCard {
   id: SkillId;
@@ -23,6 +23,8 @@ export interface SkillCard {
 export const SKILLS: Record<SkillId, SkillCard> = {
   trapSense: { id: 'trapSense', name: 'Trap sense', group: 'senses', cost: 1, threat: 1, text: 'A trap clicks before it springs: step off in time' },
   reveal: { id: 'reveal', name: 'Reveal', group: 'senses', cost: 1, threat: 1, text: 'Each checkpoint shows the hazards around you' },
+  homing: { id: 'homing', name: 'Homing sense', group: 'senses', cost: 1, threat: 1, text: 'The checkpoint arrow shows for a while after each checkpoint' },
+  footing: { id: 'footing', name: 'Footing', group: 'body', cost: 1, threat: 1, text: 'Mud and ice slow and slide you half as much' },
   deepLungs: { id: 'deepLungs', name: 'Deep lungs', group: 'body', cost: 2, threat: 2, text: 'Sprint longer, recover sooner' },
   tough: { id: 'tough', name: 'Tough', group: 'body', cost: 2, threat: 2, text: 'A fourth heart' },
   steady: { id: 'steady', name: 'Steady', group: 'body', cost: 1, threat: 1, text: 'Loss of control wears off twice as fast' },
@@ -81,9 +83,10 @@ export function pickSkill(state: RaceState, playerId: string, slot: number, even
   return true;
 }
 
-/** Counts down the Reveal glow by one tick. */
+/** Counts down Reveal's glow and Homing sense's arrow by one tick. */
 export function tickSkills(p: PlayerState, dt: number): void {
   p.revealTime = Math.max(0, p.revealTime - dt);
+  p.homingTime = Math.max(0, p.homingTime - dt);
 }
 
 /** How close (tiles, beyond its tile) a trap catches this runner: higher threat, and traps catch you on a brush. */

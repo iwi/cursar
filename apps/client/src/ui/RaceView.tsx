@@ -170,7 +170,10 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
           <div className={hud.exhausted ? 'stamina exhausted' : 'stamina'} aria-label="Stamina">
             <div style={{ width: `${Math.round(hud.stamina * 100)}%` }} />
           </div>
-          <span>{hud.exhausted ? 'Out of breath' : hud.terrain === 'Floor' ? 'Stamina' : `On ${hud.terrain.toLowerCase()}`}</span>
+          <span>
+            {hud.exhausted ? 'Out of breath' : hud.terrain === 'Floor' ? 'Stamina' : `On ${hud.terrain.toLowerCase()}`}
+            {hud.shoveReady && <> · <kbd>Space</kbd> shove</>}
+          </span>
         </div>
       )}
 

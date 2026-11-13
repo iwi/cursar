@@ -94,6 +94,8 @@ Built 12 November as agreed, with these details (decided with the owner):
 |---|---|---|---|
 | Trap sense | A trap you step on clicks and springs only if you are still on it 0.5 s later, so you can step off | 1 | 1 |
 | Reveal | Each checkpoint you touch shows traps and patrollers within 8 tiles through the fog for 5 s (no key) | 1 | 1 |
+| Homing sense | The checkpoint arrow shows for 5 s after each checkpoint you touch, even with the arrow option off (added 13 November) | 1 | 1 |
+| Footing | Mud slows you, and mud and ice take your grip, half as much (added 13 November) | 1 | 1 |
 | Deep lungs | Sprint drains 30% slower and recovers 30% faster | 2 | 2 |
 | Tough | A fourth heart, given at once | 2 | 2 |
 | Steady | Loss of control lasts half as long | 1 | 1 |
@@ -101,7 +103,9 @@ Built 12 November as agreed, with these details (decided with the owner):
 Changed 12 November after the first play test: Dash and Fleet foot were removed (too close to sprinting), Decoy (not useful), Wide eyes and Navigation (not worth taking). Reveal became automatic at checkpoints, because there is no time to press a key mid-race, and Trap sense became the warning click instead of seeing traps from further off. With no key skills left, the Q/E/F keys and the `use` input were removed; 1, 2 and 3 only take cards.
 
 - **Threat** is the sum of your cards' threat. Chasers and turrets go for the highest-threat runner in sight; chasers wake half a tile further off per point (up to 3); traps catch you when you come within 0.05 tiles per point of their tile (up to 0.3, a brush) instead of only when you stand on it.
-- Computer players do not pick skills yet. Combat is left until skills have been played (decided 12 November).
+- Computer players do not pick skills yet.
+
+**Combat** (decided 13 November, after skills had been played): everyone has a **shove** on `Space`. It hits what is in a cone in front of you (about 70° either side of your facing, reaching 0.8 tiles beyond touching), costs **25 stamina** and has a **1.5 s cooldown**; you cannot shove while stunned. A shoved **rival** is knocked back about 2 tiles and **stunned for 0.5 s**, losing no heart (not during their safe time, or just after another knock). A shoved **chaser** (awake) is **dazed for 1.5 s**, then walks home to rest. Patrollers and turrets cannot be shoved. Your page predicts the shove itself (stamina, cooldown, the swipe and whoosh), but what it hits is decided on the server, which tells the shover (a thump) and the rival (a notice naming who shoved them). Computer players do not shove. Numbers in `config.combat`.
 - The solo Tuning panel has a "Give 3 skill points and deal cards" button to try them.
 
 ## 3. Audio
@@ -166,7 +170,7 @@ Agreed for later phases:
 2. **Phase 2: multiplayer on the local network.** Done: server, lobby, 2–8 runners, rivals and their footprints inside your view, finish timer, results with routes, series scoring, reconnection. Tested across real computers on a network (12 November): works well.
 3. **Phase 2b: simple internet play.** One hosted server, room codes, no accounts. The host can remove a human player. *Done 12 November: online on Railway at https://cursarserver-production.up.railway.app. Played from different networks and it works well.*
 4. **Phase 3: hazards.** Effect system first, then checkpoints and respawn, health, dynamic obstacles, traps, enemies, with their audio. *Built 12 November: the effect system (six effects), health with checkpoint respawning, moving obstacles (boulders, barriers, gates), traps and enemies (patrollers, chasers, turrets). Phase 3 is complete apart from play-testing and tuning.*
-5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level. *Built 12 November: treasures, the skill deck and pick, threat. Combat: later, once skills have been played.*
+5. **Phase 4: skills, perks and combat.** Including the one-key skill pick and the threat level. *Built 12 November: treasures, the skill deck and pick, threat. Deck trimmed after the first play test; Homing sense, Footing and the shove added 13 November. Phase 4 is complete apart from tuning.*
 6. **Phase 5: map editor.** Using the same map format the generator already produces.
 7. **Phase 6: recordings.** Managing several ghosts, statistics, racing other players' ghosts.
 8. **Phase 7–8: wider application, accounts, matchmaking, final graphics.**
@@ -174,6 +178,7 @@ Agreed for later phases:
 ## 6. Open questions
 
 - Skill costs, threat and strengths, and treasure counts, are first guesses (`SKILLS`, `config.skills`, `config.threat`, `MAP_SIZES`).
+- The shove's reach, cost, cooldown and stuns are first guesses, in `config.combat`.
 - Enemy counts, speeds and ranges are first guesses, in `config.enemies` and `MAP_SIZES`.
 - Trap counts, effects and the 2-tile reveal are first guesses, in `config.traps` and `MAP_SIZES`.
 - Obstacle speeds, timings and counts are first guesses, in `config.obstacles` and `MAP_SIZES` (barrier speed, gate damage and counts tuned after the first play test).

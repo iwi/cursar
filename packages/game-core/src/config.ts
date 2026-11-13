@@ -130,12 +130,30 @@ export interface GameConfig {
   skills: {
     /** Trap sense: a trap stepped on springs only if the runner is still on it after this long (seconds). */
     trapSenseDelaySeconds: number;
+    /** Footing multiplies how much mud slows you and how much grip mud and ice take away. */
+    footingMul: number;
+    /** Homing sense: the checkpoint arrow shows for this long after touching a checkpoint (seconds). */
+    homingSeconds: number;
     deepLungsDrainMul: number;
     deepLungsRegenMul: number;
     /** Steady multiplies how long loss of control lasts. */
     steadyMul: number;
     /** Reveal: on touching a checkpoint, hazards within `range` tiles show for `seconds`. */
     reveal: { seconds: number; range: number };
+  };
+  /** The shove (Space): everyone has it. */
+  combat: {
+    /** How far beyond touching (tiles, edge to edge) a shove reaches. */
+    reach: number;
+    /** Half the angle of the shove's cone in front of the runner (radians). */
+    arc: number;
+    staminaCost: number;
+    cooldownSeconds: number;
+    /** Speed a shoved rival is sent off at (tiles a second); they slide about 2 tiles. */
+    knockSpeed: number;
+    rivalStunSeconds: number;
+    /** A shoved chaser is stunned this long, then walks home to rest. */
+    chaserStunSeconds: number;
   };
   /** What threat (the sum of a runner's cards' threat) does. Enemies also prefer the highest-threat runner in sight. */
   threat: {
@@ -225,11 +243,14 @@ export const DEFAULT_CONFIG: GameConfig = {
   treasures: { reach: 0.7, pointsEach: 1 },
   skills: {
     trapSenseDelaySeconds: 0.5,
+    footingMul: 0.5,
+    homingSeconds: 5,
     deepLungsDrainMul: 0.7,
     deepLungsRegenMul: 1.3,
     steadyMul: 0.5,
     reveal: { seconds: 5, range: 8 },
   },
+  combat: { reach: 0.8, arc: 1.2, staminaCost: 25, cooldownSeconds: 1.5, knockSpeed: 14, rivalStunSeconds: 0.5, chaserStunSeconds: 1.5 },
   threat: { trapReachPerThreat: 0.05, trapReachMax: 0.3, wakeRangePerThreat: 0.5, wakeRangeMax: 3 },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {

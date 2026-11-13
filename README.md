@@ -66,6 +66,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 | Restart | `R` in solo play; in multiplayer the host restarts from the pause panel |
 | Pause | `Esc` (in multiplayer, the host only: it pauses for everyone) |
 | Full map | `M` or the Map button during the race; you stand still while it is open, and the clock keeps running |
+| Shove | `Space`: pushes a rival or an awake chaser in front of you (uses stamina) |
 | Take a skill card | `1` `2` `3` when cards are offered |
 
 - The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.

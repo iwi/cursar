@@ -118,6 +118,7 @@ export function knock(
   hearts: number,
   stunSeconds: number,
   events: GameEvent[],
+  speed = state.config.obstacles.knockSpeed,
 ): void {
   const { map, config } = state;
   p.hitGuard = config.obstacles.hitGuardSeconds;
@@ -125,8 +126,8 @@ export function knock(
   const fromY = p.y;
   p.x = x;
   p.y = y;
-  p.vx = nx * config.obstacles.knockSpeed;
-  p.vy = ny * config.obstacles.knockSpeed;
+  p.vx = nx * speed;
+  p.vy = ny * speed;
   resolveWalls(map, p, config.player.radius, fromX, fromY, closedGateCheck(map, config, obstacleTime(state)));
   const before = events.length;
   damage(config, p, hearts, events);

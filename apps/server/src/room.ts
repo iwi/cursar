@@ -303,7 +303,7 @@ export class Room {
         if (message.seq <= last.seq) return;
         // A client sending faster than the simulation runs gains nothing: old inputs are dropped.
         if (member.queue.length >= MAX_QUEUED_INPUTS) member.queue.splice(0, MAX_QUEUED_INPUTS / 2);
-        member.queue.push({ seq: message.seq, mx: message.mx, my: message.my, sprint: message.sprint });
+        member.queue.push({ seq: message.seq, mx: message.mx, my: message.my, sprint: message.sprint, ...(message.shove ? { shove: true } : {}) });
         return;
       }
       case 'pick': {
@@ -458,7 +458,8 @@ export class Room {
       const next = m.queue.shift();
       if (next) {
         inputs[m.id] = next;
-        m.lastInput = next;
+        // A shove happens once: a repeated input (when the page falls behind) does not shove again.
+        m.lastInput = { seq: next.seq, mx: next.mx, my: next.my, sprint: next.sprint };
         m.starved = 0;
         continue;
       } else if (++m.starved > INPUT_TIMEOUT_TICKS) {
@@ -481,7 +482,7 @@ export class Room {
         });
       } else if (event.type === 'footstep') {
         this.shareFootstep(race, event.playerId);
-      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit' || event.type === 'trap' || event.type === 'enemyHit') {
+      } else if (event.type === 'effect' || event.type === 'effectResisted' || event.type === 'hurt' || event.type === 'respawn' || event.type === 'obstacleHit' || event.type === 'trap' || event.type === 'enemyHit' || event.type === 'shoved' || event.type === 'shoveHit') {
         // Effects and damage come from the server (hazards, traps), so the runner's page cannot predict them.
         const index = state.players.findIndex((p) => p.id === event.playerId);
         const member = race.racers[index];
@@ -560,7 +561,7 @@ export class Room {
         const spawn = map.enemies?.[index];
         if (!foe || !spawn || spawn.kind === 'patroller') return;
         if (foe.kind === 'chaser') {
-          if (inView(foe.x, foe.y)) foes.push({ i: index, x: round(foe.x, 100), y: round(foe.y, 100), a: round(foe.facing, 100), m: foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
+          if (inView(foe.x, foe.y)) foes.push({ i: index, x: round(foe.x, 100), y: round(foe.y, 100), a: round(foe.facing, 100), m: foe.stun > 0 ? 3 : foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
         } else if (inView(spawn.x, spawn.y)) {
           foes.push({ i: index, x: spawn.x, y: spawn.y, a: round(foe.aim, 100), m: foe.charge >= 0 ? 1 : 0 });
         }

@@ -24,6 +24,8 @@ export interface MoveIntent {
   mx: number;
   my: number;
   sprint: boolean;
+  /** Shove: set on the tick after its key was pressed. */
+  shove?: true;
 }
 
 export interface Rival {
@@ -203,7 +205,7 @@ export class LocalDriver implements RaceDriver {
     this.state.foes.forEach((foe, index) => {
       const spawn = this.state.map.enemies?.[index];
       if (!foe || !spawn || spawn.kind === 'patroller') return;
-      if (foe.kind === 'chaser') out.push({ index, x: foe.x, y: foe.y, angle: foe.facing, mode: foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
+      if (foe.kind === 'chaser') out.push({ index, x: foe.x, y: foe.y, angle: foe.facing, mode: foe.stun > 0 ? 3 : foe.mode === 'sleep' ? 0 : foe.mode === 'chase' ? 1 : 2 });
       else out.push({ index, x: spawn.x, y: spawn.y, angle: foe.aim, mode: foe.charge >= 0 ? 1 : 0 });
     });
     return out;

@@ -3,7 +3,7 @@ import { MAP_SIZES, type MapSize } from '../map/generate';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 export const MAX_PLAYERS = 8;
 export const MAX_NAME_LENGTH = 16;
 /** Network snapshots are sent every this many simulation ticks (3 ticks at 60 Hz = 20 per second). */
@@ -102,7 +102,7 @@ export interface FoeView {
   y: number;
   /** Facing (chaser) or aim (turret), radians. */
   a: number;
-  /** Chaser: 0 asleep, 1 chasing, 2 going home. Turret: 0 idle, 1 whirring. */
+  /** Chaser: 0 asleep, 1 chasing, 2 going home, 3 stunned by a shove. Turret: 0 idle, 1 whirring. */
   m: number;
 }
 
@@ -135,7 +135,7 @@ export type ClientMessage =
   | { t: 'addBot'; level: BotLevel }
   /** Host: remove a computer player, or a person (who cannot rejoin this room from the same page). */
   | { t: 'remove'; id: string }
-  | { t: 'input'; seq: number; mx: number; my: number; sprint: boolean }
+  | { t: 'input'; seq: number; mx: number; my: number; sprint: boolean; shove?: true }
   /** Take card 0, 1 or 2 of the skill offer. */
   | { t: 'pick'; slot: number }
   | { t: 'marker'; x: number; y: number }
@@ -259,6 +259,7 @@ export function parseClientMessage(text: string): ClientMessage | null {
         mx: Math.max(-1, Math.min(1, m.mx)),
         my: Math.max(-1, Math.min(1, m.my)),
         sprint: m.sprint === true,
+        ...(m.shove === true ? { shove: true as const } : {}),
       };
     case 'pick':
       return isNumber(m.slot) && [0, 1, 2].includes(m.slot) ? { t: 'pick', slot: m.slot } : null;

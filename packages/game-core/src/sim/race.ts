@@ -6,6 +6,7 @@ import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstac
 import { springTraps } from './traps';
 import { createFoes, hitPatrollers, stepEnemies } from './enemies';
 import { maxHearts } from './health';
+import { resolveShoves, startShove } from './combat';
 import { hasSkill, offerSkills, tickSkills } from './skills';
 import { type GameEvent, NO_INPUT, type PlayerInput, type PlayerState, type RaceState } from './types';
 
@@ -80,6 +81,8 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         offer: null,
         offersMade: 0,
         revealTime: 0,
+        homingTime: 0,
+        shoveCooldown: 0,
         trapClick: null,
         finished: false,
         finishTime: null,
@@ -175,12 +178,16 @@ export function step(state: RaceState, inputs: Record<string, PlayerInput>): Gam
   state.raceTicks++;
   state.raceTime = state.raceTicks / config.tickRate;
 
+  const firstEvent = events.length;
   for (const p of state.players) {
     if (p.finished) continue;
     const input = inputs[p.id] ?? NO_INPUT;
     p.lastInputSeq = input.seq;
     stepPlayer(state, p, input, dt, events);
   }
+  // Shoves hit other runners and chasers, so they are settled here and never predicted.
+  const shovers = events.slice(firstEvent).flatMap((e) => (e.type === 'shove' ? [e.playerId] : []));
+  if (shovers.length > 0) resolveShoves(state, shovers, events);
   stepEnemies(state, dt, events);
 
   if (state.players.every((p) => p.finished) || state.raceTime >= state.deadline) {
@@ -206,6 +213,7 @@ export function stepPlayer(
 ): void {
   const { config, map } = state;
   tickSkills(p, dt);
+  startShove(state, p, input, dt, events);
   // Effects such as stun or reversed controls change what the input does.
   input = controlledInput(p, input);
   const moving = Math.hypot(input.mx, input.my) > 0.01;
@@ -283,6 +291,7 @@ export function stepPlayer(
       p.respawnY = zone.y + zone.h / 2;
       // Reveal: the hazards round a new checkpoint show for a moment.
       if (hasSkill(p, 'reveal')) p.revealTime = config.skills.reveal.seconds;
+      if (hasSkill(p, 'homing')) p.homingTime = config.skills.homingSeconds;
     } else {
       remaining++;
     }

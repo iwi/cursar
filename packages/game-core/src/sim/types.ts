@@ -9,6 +9,8 @@ export interface PlayerInput {
   mx: number;
   my: number;
   sprint: boolean;
+  /** Shove (set on the tick the key was pressed). */
+  shove?: boolean;
 }
 
 export const NO_INPUT: PlayerInput = { seq: 0, mx: 0, my: 0, sprint: false };
@@ -84,6 +86,10 @@ export interface PlayerState {
   offersMade: number;
   /** Seconds left of Reveal's glow after touching a checkpoint. */
   revealTime: number;
+  /** Seconds left of Homing sense's arrow after touching a checkpoint. */
+  homingTime: number;
+  /** Seconds left before the runner can shove again. */
+  shoveCooldown: number;
   /** Trap sense: the armed trap the runner stepped on and the race time it clicked, or null. */
   trapClick: { index: number; at: number } | null;
   finished: boolean;
@@ -106,6 +112,8 @@ export interface ChaserState {
   /** Chasing: seconds left after losing sight. Returning or asleep: seconds left of rest before it may wake again. */
   timer: number;
   cue: number;
+  /** Seconds left of being stunned by a shove (it stands still, then goes home). */
+  stun: number;
 }
 
 export interface TurretState {
@@ -192,6 +200,12 @@ export type GameEvent =
   | { type: 'skill'; playerId: string; skill: SkillId }
   /** Trap sense: the runner stepped on an armed trap, which springs unless they get off it in time. */
   | { type: 'trapClick'; playerId: string; index: number }
+  /** The runner shoved (whether or not it hit anything). */
+  | { type: 'shove'; playerId: string }
+  /** The runner's shove hit a rival or a chaser. */
+  | { type: 'shoveHit'; playerId: string; target: 'rival' | 'chaser' }
+  /** The runner was shoved by a rival. */
+  | { type: 'shoved'; playerId: string; by: string }
   /** The runner lost hearts. */
   | { type: 'hurt'; playerId: string; amount: number; health: number }
   /** Out of hearts: the runner is back at their respawn point. */

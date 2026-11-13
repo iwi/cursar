@@ -10,6 +10,8 @@ export interface HudState {
   /** Seconds left before the race is cut off. */
   timeLeft: number;
   stamina: number;
+  /** The shove (Space) can be used now. */
+  shoveReady: boolean;
   exhausted: boolean;
   sprinting: boolean;
   markersPlaced: number;

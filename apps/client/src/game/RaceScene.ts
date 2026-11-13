@@ -129,6 +129,10 @@ export class RaceScene extends Phaser.Scene {
   /** Mouse movement: where the runner is heading (tiles), and whether the button is held. */
   private moveTarget: { x: number; y: number } | null = null;
   private mouseHeld = false;
+  /** The shove key was pressed since the last tick. */
+  private pendingShove = false;
+  /** When your last shove started (scene time, ms), for the swipe drawn in front of you. */
+  private shoveAt = -1e9;
   private labels = new Map<string, Phaser.GameObjects.Text>();
 
   private entityGfx!: Phaser.GameObjects.Graphics;
@@ -203,6 +207,8 @@ export class RaceScene extends Phaser.Scene {
     }
     keyboard.on('keydown-ENTER', () => driver.ready());
     keyboard.on('keydown-M', () => this.toggleMap());
+    keyboard.addCapture('SPACE');
+    keyboard.on('keydown-SPACE', () => (this.pendingShove = true));
     // Skill cards: 1, 2, 3.
     (['ONE', 'TWO', 'THREE'] as const).forEach((key, slot) => keyboard.on(`keydown-${key}`, () => this.pick(slot)));
     keyboard.on('keydown-BACKSPACE', () => {
@@ -325,7 +331,10 @@ export class RaceScene extends Phaser.Scene {
 
   private readIntent(): MoveIntent {
     // Looking at the full map costs time: the runner cannot move meanwhile.
-    if (this.peeking()) return { mx: 0, my: 0, sprint: false };
+    if (this.peeking()) {
+      this.pendingShove = false;
+      return { mx: 0, my: 0, sprint: false };
+    }
     if (this.autopilot) {
       const { mx, my, sprint } = this.autopilot(this.me());
       return { mx, my, sprint };
@@ -334,10 +343,13 @@ export class RaceScene extends Phaser.Scene {
     const mx = (down('right') ? 1 : 0) - (down('left') ? 1 : 0);
     const my = (down('down') ? 1 : 0) - (down('up') ? 1 : 0);
     const sprint = down('sprint');
+    const shove = this.pendingShove && this.state.phase === 'racing';
+    this.pendingShove = false;
+    const withShove = (intent: MoveIntent): MoveIntent => (shove ? { ...intent, shove: true } : intent);
     // The keys always win over mouse movement, and cancel it.
     if (mx !== 0 || my !== 0 || this.state.phase !== 'racing') {
       this.moveTarget = null;
-      return { mx, my, sprint };
+      return withShove({ mx, my, sprint });
     }
     if (this.mouseHeld) {
       const pointer = this.input.activePointer;
@@ -351,11 +363,11 @@ export class RaceScene extends Phaser.Scene {
       const dist = Math.hypot(dx, dy);
       if (dist < MOUSE_ARRIVE_TILES) {
         if (!this.mouseHeld) this.moveTarget = null;
-        return { mx: 0, my: 0, sprint };
+        return withShove({ mx: 0, my: 0, sprint });
       }
-      return { mx: dx / dist, my: dy / dist, sprint };
+      return withShove({ mx: dx / dist, my: dy / dist, sprint });
     }
-    return { mx: 0, my: 0, sprint };
+    return withShove({ mx: 0, my: 0, sprint });
   }
 
   private handleEvent(event: GameEvent): void {
@@ -416,6 +428,21 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'enemyHit':
         if (event.playerId === me.id) bridge.emit('notice', ENEMY_LABEL[event.kind]);
+        break;
+      case 'shove':
+        if (event.playerId === me.id) {
+          audio.shove();
+          this.shoveAt = this.time.now;
+        }
+        break;
+      case 'shoveHit':
+        if (event.playerId === me.id) audio.shoveHit();
+        break;
+      case 'shoved':
+        if (event.playerId === me.id) {
+          audio.shoved();
+          bridge.emit('notice', `Shoved by ${this.driver.rivals().find((r) => r.id === event.by)?.name ?? 'a rival'}`);
+        }
         break;
       case 'foeHeard':
         audio.foe(event.sound, event.pan, event.closeness, event.aimed);
@@ -933,6 +960,15 @@ export class RaceScene extends Phaser.Scene {
     if (state.phase === 'preview' || this.mapBlend > 0.5) g.lineStyle(3, mine, 0.9).strokeCircle(x, y, r * 4 + Math.sin(this.time.now / 180) * 4);
     g.fillStyle(mine, alpha).fillCircle(x, y, r * scale);
     g.fillStyle(0xffffff, alpha).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
+    // A shove: a short white swipe across the cone in front.
+    const swipe = (this.time.now - this.shoveAt) / 180;
+    if (swipe >= 0 && swipe < 1) {
+      const reach = (state.config.player.radius * 2 + state.config.combat.reach) * PX;
+      g.lineStyle(4, 0xffffff, 1 - swipe);
+      g.beginPath();
+      g.arc(x, y, reach * (0.7 + 0.3 * swipe), me.facing - state.config.combat.arc, me.facing + state.config.combat.arc);
+      g.strokePath();
+    }
     g.lineStyle(2, 0x1a1205, alpha).strokeCircle(x, y, r * scale);
 
     // Stamina ring round the runner whenever it is not full.
@@ -962,7 +998,7 @@ export class RaceScene extends Phaser.Scene {
     if (racing) {
       const next = me.markers.find((marker) => !marker.reached);
       if (next) this.drawArrow(top, x, y, next.x - px, next.y - py, mine);
-      if (finishArrow) {
+      if (finishArrow || me.homingTime > 0) {
         const target = this.objective(px, py);
         this.drawArrow(top, x, y, target.dx, target.dy, target.finish ? COLOR.finishArrow : COLOR.checkpoint);
       }
@@ -1017,13 +1053,18 @@ export class RaceScene extends Phaser.Scene {
       if (spawn.kind === 'chaser') {
         const r = config.enemies.chaser.radius * PX * k;
         const awake = foe.mode !== 0;
-        g.fillStyle(awake ? 0xd9342b : 0x7a2a26, 1).fillCircle(x, y, r);
+        const dazed = foe.mode === 3;
+        g.fillStyle(dazed ? 0xa0605a : awake ? 0xd9342b : 0x7a2a26, 1).fillCircle(x, y, r);
         g.lineStyle(2, 0x2b0907, 1).strokeCircle(x, y, r);
         // Eyes: open and looking ahead when awake, shut when asleep.
         for (const side of [-0.45, 0.45]) {
           const ex = x + Math.cos(foe.angle + side) * r * 0.55;
           const ey = y + Math.sin(foe.angle + side) * r * 0.55;
-          if (awake) g.fillStyle(0xfff3a0, 1).fillCircle(ex, ey, r * 0.22);
+          if (dazed) {
+            // Dazed after a shove: crossed eyes.
+            g.lineStyle(2, 0xfff3a0, 1).lineBetween(ex - r * 0.15, ey - r * 0.15, ex + r * 0.15, ey + r * 0.15);
+            g.lineBetween(ex - r * 0.15, ey + r * 0.15, ex + r * 0.15, ey - r * 0.15);
+          } else if (awake) g.fillStyle(0xfff3a0, 1).fillCircle(ex, ey, r * 0.22);
           else g.lineStyle(2, 0xffb3a8, 1).lineBetween(ex - r * 0.18, ey, ex + r * 0.18, ey);
         }
       } else {
@@ -1280,6 +1321,7 @@ export class RaceScene extends Phaser.Scene {
       raceTime: me.finishTime ?? state.raceTime,
       timeLeft: state.deadline - state.raceTime,
       stamina: me.stamina / state.config.sprint.staminaMax,
+      shoveReady: state.phase === 'racing' && !me.finished && me.shoveCooldown <= 0 && me.stamina >= state.config.combat.staminaCost,
       exhausted: me.exhausted,
       sprinting: me.sprinting,
       markersPlaced: me.markers.length,

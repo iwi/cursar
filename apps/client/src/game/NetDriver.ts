@@ -201,7 +201,7 @@ export class NetDriver implements RaceDriver {
           const input: PlayerInput = { seq: ++this.seq, ...readIntent() };
           this.pending.push(input);
           if (this.pending.length > 120) this.pending.splice(0, 60);
-          this.connection.send({ t: 'input', ...input });
+          this.connection.send({ t: 'input', seq: input.seq, mx: input.mx, my: input.my, sprint: input.sprint, ...(input.shove ? { shove: true as const } : {}) });
           // Hits are predicted, so a stun is felt at once, but their sounds wait for the server's word.
           const predicted: GameEvent[] = [];
           stepPlayer(state, me, input, dt, predicted, true);

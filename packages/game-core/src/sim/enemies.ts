@@ -21,7 +21,7 @@ export function createFoes(map: GameMap): (FoeState | null)[] {
   return (map.enemies ?? []).map((e, index): FoeState | null => {
     if (e.kind === 'chaser') {
       // Snores staggered by index, so the race stays the same every time it is run.
-      return { kind: 'chaser', x: e.x, y: e.y, facing: Math.PI / 2, mode: 'sleep', target: null, lastX: e.x, lastY: e.y, timer: 0, cue: (index % 5) * 0.5 };
+      return { kind: 'chaser', x: e.x, y: e.y, facing: Math.PI / 2, mode: 'sleep', target: null, lastX: e.x, lastY: e.y, timer: 0, cue: (index % 5) * 0.5, stun: 0 };
     }
     if (e.kind === 'turret') return { kind: 'turret', aim: 0, target: null, charge: -1, reload: 0 };
     return null;
@@ -176,6 +176,12 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
   const cfg = config.enemies.chaser;
   const cue = (sound: FoeSound) => events.push({ type: 'foeCue', index, sound });
 
+  // Shoved: it stands dazed, then walks home to rest.
+  if (c.stun > 0) {
+    c.stun = Math.max(0, c.stun - dt);
+    return;
+  }
+
   if (c.mode === 'sleep') {
     c.cue -= dt;
     if (c.cue <= 0) {
@@ -275,7 +281,7 @@ function stepChaser(state: RaceState, index: number, home: Point, c: ChaserState
   moveChaser(state, c, goal.x, goal.y, cfg.speed * RETURN_PACE, dt);
 }
 
-function goHome(c: ChaserState, rest: number): void {
+export function goHome(c: ChaserState, rest: number): void {
   c.mode = 'return';
   c.target = null;
   c.timer = rest;

@@ -215,10 +215,41 @@ describe('treasures on generated maps', () => {
   });
 
   it('every skill is in the deck, with a cost of 1 to 3', () => {
-    expect(SKILL_IDS).toHaveLength(5);
+    expect(SKILL_IDS).toHaveLength(7);
     for (const id of SKILL_IDS) {
       expect(SKILLS[id].cost).toBeGreaterThanOrEqual(1);
       expect(SKILLS[id].cost).toBeLessThanOrEqual(3);
     }
+  });
+});
+
+describe('footing and homing sense', () => {
+  const MUD = mapFromText([
+    '##########################',
+    '#Smmmmmmmmmmmmmmmmmmmmmm.#',
+    '#........................#',
+    '#.......................F#',
+    '##########################',
+  ]);
+  it('footing: mud slows you half as much', () => {
+    const go = (skills: SkillId[]) => {
+      const state = raceOn(MUD);
+      state.players[0]!.skills = skills;
+      run(state, right, 1);
+      // Top speed once it has picked up (grip changes how fast that happens).
+      return state.players[0]!.vx;
+    };
+    const plain = go([]);
+    const footed = go(['footing']);
+    const mud = 0.55;
+    expect(footed / plain).toBeCloseTo((1 - (1 - mud) * config.skills.footingMul) / mud, 1);
+  });
+
+  it('homing sense: the arrow shows for a while after each checkpoint', () => {
+    const { state, me } = withSkills(['homing']);
+    while (!me.checkpoints[0]) run(state, right, 1 / 60);
+    expect(me.homingTime).toBeGreaterThan(config.skills.homingSeconds - 0.1);
+    run(state, still, config.skills.homingSeconds + 0.1);
+    expect(me.homingTime).toBe(0);
   });
 });

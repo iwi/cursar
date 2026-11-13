@@ -287,6 +287,22 @@ export class AudioEngine {
     this.tone({ freq: 880, to: 1760, dur: 0.5, vol: 0.12, type: 'sine' });
   }
 
+  /** Your shove: a quick whoosh. */
+  shove(): void {
+    this.noise({ dur: 0.18, freq: 900, q: 0.8, vol: 0.18, attack: 0.01 });
+  }
+
+  /** Your shove landed: a thump. */
+  shoveHit(): void {
+    this.tone({ freq: 140, to: 70, dur: 0.16, vol: 0.3, type: 'triangle' });
+  }
+
+  /** A rival shoved you. */
+  shoved(): void {
+    this.tone({ freq: 220, to: 90, dur: 0.22, vol: 0.28, type: 'sawtooth' });
+    this.noise({ dur: 0.12, freq: 600, q: 1, vol: 0.15 });
+  }
+
   /** Trap sense: a trap underfoot clicked. Get off it! */
   trapClick(): void {
     this.tone({ freq: 2400, dur: 0.03, vol: 0.25, type: 'square' });
