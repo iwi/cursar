@@ -4,10 +4,10 @@ import { INK, type Look, shade } from './looks';
 
 /**
  * Sprites for the things on the map, in each look: checkpoint flags, coins,
- * boulders, patrollers, chasers and traps. Each is a strip of frames, drawn
+ * boulders, patrollers, chasers, turrets and their bolts, gates and traps. Each is a strip of frames, drawn
  * facing right (+x) where it has a facing, so the scene can turn it.
  */
-export type PropName = 'flag' | 'coin' | 'boulder' | 'patroller' | 'chaser' | `trap-${TrapKind}`;
+export type PropName = 'flag' | 'coin' | 'boulder' | 'patroller' | 'chaser' | 'turret' | 'gate' | `trap-${TrapKind}`;
 
 export interface PropSheet {
   canvas: HTMLCanvasElement;
@@ -22,6 +22,13 @@ export interface PropSheet {
 export const FLAG_DONE = 2;
 /** Chaser frames. */
 export const CHASER_FRAME = { asleep: 0, awake: 1, dazed: 2 } as const;
+/** Turret frames: the base (never turns), the head at rest and while charging (turned to its aim), and a bolt. */
+export const TURRET_FRAME = { base: 0, head: 1, charging: 2, bolt: 3 } as const;
+/**
+ * Gate frames, one tile each, for a gate lying along x (it blocks a runner
+ * crossing it in y): closed, open, and the post at either end.
+ */
+export const GATE_FRAME = { closed: 0, open: 1, post: 2 } as const;
 
 const PINK = 0xff4f9a;
 const SHEETS: Record<string, { frames: number; tiles: number }> = {
@@ -30,6 +37,8 @@ const SHEETS: Record<string, { frames: number; tiles: number }> = {
   boulder: { frames: 1, tiles: 2 },
   patroller: { frames: 2, tiles: 1 },
   chaser: { frames: 3, tiles: 1 },
+  turret: { frames: 4, tiles: 1 },
+  gate: { frames: 3, tiles: 1 },
   trap: { frames: 1, tiles: 1 },
 };
 
@@ -188,6 +197,54 @@ const PIXEL_PAINT: Record<string, (f: number, p: Pen, trap: TrapKind | null) => 
       }
     }
     return 0x2b0907;
+  },
+  turret: (f, p) => {
+    if (f === TURRET_FRAME.base) {
+      // A riveted iron plinth with chamfered corners.
+      p.rect(3, 2, 10, 12, 0x3a4252);
+      p.rect(2, 3, 12, 10, 0x3a4252);
+      p.rect(3, 3, 10, 1, 0x4d5668);
+      p.rect(3, 12, 10, 1, 0x2a303c);
+      for (const [x, y] of [[4, 4], [11, 4], [4, 11], [11, 11]] as const) p.set(x, y, 0x7a8496);
+      return 0x10131a;
+    }
+    if (f === TURRET_FRAME.bolt) {
+      p.disc(8, 8, 5.5, 0xff9f1c);
+      p.disc(8, 8, 3.5, 0xffd27a);
+      p.disc(7.5, 7.5, 1.8, 0xfff6dc);
+      return null;
+    }
+    // The head: a dome with a barrel to the right, glowing while it charges.
+    const hot = f === TURRET_FRAME.charging;
+    p.rect(9, 6, 5, 3, hot ? 0xffb347 : 0xaab4c8);
+    p.rect(14, 6, 1, 3, hot ? 0xfff0c2 : 0x5d6a80);
+    p.disc(7.5, 7.5, 3.8, hot ? 0xff9f1c : 0x5d6a80);
+    p.disc(6.5, 6.5, 1.6, hot ? 0xffd27a : 0x8a96ac);
+    return 0x10131a;
+  },
+  gate: (f, p) => {
+    if (f === GATE_FRAME.post) {
+      p.rect(4, 4, 8, 8, 0x5a6272);
+      p.rect(5, 5, 6, 1, 0x8a93a6);
+      p.rect(5, 10, 6, 1, 0x3a4050);
+      p.rect(7, 7, 2, 2, 0xc9d2e3);
+      return 0x10131a;
+    }
+    if (f === GATE_FRAME.open) {
+      // Only the slot the bars drop out of, with their tips showing.
+      p.rect(0, 7, 16, 2, 0x15161d);
+      for (const x of [1, 4, 7, 10, 13]) p.rect(x, 7, 2, 1, 0x6c7486);
+      return null;
+    }
+    // Closed: an iron lattice between two rails.
+    p.rect(0, 4, 16, 8, 0x22252f);
+    for (let x = -8; x < 16; x += 8) {
+      p.line(x, 11, x + 7, 4, 0xaab4c8);
+      p.line(x + 1, 4, x + 8, 11, 0xaab4c8);
+    }
+    p.rect(0, 3, 16, 2, 0xc9d2e3);
+    p.rect(0, 11, 16, 2, 0x8a93a6);
+    return 0x10131a;
   },
   trap: (_f, p, trap) => {
     const col = TRAP_STYLE[trap!].color;
@@ -453,6 +510,129 @@ const INK_PAINT: Record<string, (f: number, g: CanvasRenderingContext2D, trap: T
       for (let i = 1; i <= 4; i++) g.lineTo(i % 2 ? 0.74 : 0.8, 0.42 + i * 0.04);
       g.stroke();
     }
+  },
+  turret: (f, g) => {
+    g.strokeStyle = ink();
+    if (f === TURRET_FRAME.base) {
+      // A square plinth, washed grey and hatched.
+      g.beginPath();
+      g.roundRect(0.14, 0.14, 0.72, 0.72, 0.12);
+      g.fillStyle = 'rgba(90,100,120,0.45)';
+      g.fill();
+      g.save();
+      g.clip();
+      g.strokeStyle = ink(0.3);
+      g.lineWidth = 1.5 * W;
+      for (let k = -0.2; k < 1.2; k += 0.1) {
+        g.beginPath();
+        g.moveTo(k, 1);
+        g.lineTo(k + 0.6, 0.4);
+        g.stroke();
+      }
+      g.restore();
+      g.beginPath();
+      g.roundRect(0.14, 0.14, 0.72, 0.72, 0.12);
+      g.lineWidth = 2.5 * W;
+      g.stroke();
+      return;
+    }
+    if (f === TURRET_FRAME.bolt) {
+      g.fillStyle = 'rgba(255,159,28,0.45)';
+      g.beginPath();
+      g.arc(0.5, 0.5, 0.36, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = 'rgba(255,240,194,1)';
+      g.beginPath();
+      g.arc(0.5, 0.5, 0.2, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 2 * W;
+      g.stroke();
+      g.lineWidth = 1.5 * W;
+      g.beginPath();
+      for (let n = 0; n < 4; n++) {
+        const a = Math.PI / 4 + (n * Math.PI) / 2;
+        g.moveTo(0.5 + Math.cos(a) * 0.26, 0.5 + Math.sin(a) * 0.26);
+        g.lineTo(0.5 + Math.cos(a) * 0.38, 0.5 + Math.sin(a) * 0.38);
+      }
+      g.stroke();
+      return;
+    }
+    const hot = f === TURRET_FRAME.charging;
+    g.lineWidth = 2 * W;
+    g.fillStyle = hot ? 'rgba(255,179,71,0.9)' : 'rgba(170,180,200,0.85)';
+    g.beginPath();
+    g.rect(0.5, 0.43, 0.42, 0.14);
+    g.fill();
+    g.stroke();
+    g.fillStyle = hot ? 'rgb(255,159,28)' : 'rgb(93,106,128)';
+    g.beginPath();
+    g.arc(0.5, 0.5, 0.19, 0, Math.PI * 2);
+    g.fill();
+    g.lineWidth = 2.5 * W;
+    g.stroke();
+    if (hot) {
+      // Whirring: strokes behind the head.
+      g.lineWidth = 1.5 * W;
+      for (const [a0, a1] of [[2.3, 2.9], [3.4, 4.0]] as const) {
+        g.beginPath();
+        g.arc(0.5, 0.5, 0.28, a0, a1);
+        g.stroke();
+      }
+    }
+  },
+  gate: (f, g) => {
+    g.strokeStyle = ink();
+    if (f === GATE_FRAME.post) {
+      g.fillStyle = 'rgba(90,98,114,0.7)';
+      g.beginPath();
+      g.rect(0.3, 0.3, 0.4, 0.4);
+      g.fill();
+      g.lineWidth = 2.5 * W;
+      g.stroke();
+      g.lineWidth = 1.5 * W;
+      g.beginPath();
+      g.moveTo(0.3, 0.3);
+      g.lineTo(0.7, 0.7);
+      g.moveTo(0.7, 0.3);
+      g.lineTo(0.3, 0.7);
+      g.stroke();
+      return;
+    }
+    if (f === GATE_FRAME.open) {
+      // The line it closes along, dashed.
+      g.lineWidth = 2 * W;
+      g.setLineDash([0.1, 0.08]);
+      g.beginPath();
+      g.moveTo(0.04, 0.5);
+      g.lineTo(0.96, 0.5);
+      g.stroke();
+      g.setLineDash([]);
+      return;
+    }
+    // Closed: a lattice between two rails, washed steel blue.
+    g.fillStyle = 'rgba(201,210,227,0.6)';
+    g.fillRect(0, 0.3, 1, 0.4);
+    g.save();
+    g.beginPath();
+    g.rect(0, 0.3, 1, 0.4);
+    g.clip();
+    g.lineWidth = 2 * W;
+    g.beginPath();
+    for (let x = -0.5; x < 1.2; x += 0.25) {
+      g.moveTo(x, 0.7);
+      g.lineTo(x + 0.4, 0.3);
+      g.moveTo(x, 0.3);
+      g.lineTo(x + 0.4, 0.7);
+    }
+    g.stroke();
+    g.restore();
+    g.lineWidth = 3 * W;
+    g.beginPath();
+    for (const y of [0.3, 0.7]) {
+      g.moveTo(0, y);
+      g.lineTo(1, y);
+    }
+    g.stroke();
   },
   trap: (_f, g, trap) => {
     const col = TRAP_STYLE[trap!].color;

@@ -42,7 +42,7 @@ import {
   paintPixelLandmark,
   paintPixelRunner,
 } from './looks';
-import { CHASER_FRAME, FLAG_DONE, type PropName, paintProp } from './props';
+import { CHASER_FRAME, FLAG_DONE, GATE_FRAME, type PropName, paintProp, TURRET_FRAME } from './props';
 
 export interface RaceSceneData {
   map: GameMap;
@@ -73,7 +73,6 @@ const COLOR = {
   checkpoint: 0xff4f9a,
   checkpointDone: 0x8a93a6,
   barrier: 0xe8b04a,
-  gate: 0xc9d2e3,
 };
 
 /** A landmark fades while a runner is this close to its centre (tiles). */
@@ -880,7 +879,7 @@ export class RaceScene extends Phaser.Scene {
    * to `snap` steps a turn); `scale` enlarges it on the whole-map views; `top`
    * draws it above the fog (for things the Reveal skill shows).
    */
-  private prop(slot: string, name: PropName, frame: number, x: number, y: number, opts: { turn?: number; snap?: number; scale?: number; alpha?: number; top?: boolean } = {}): void {
+  private prop(slot: string, name: PropName, frame: number, x: number, y: number, opts: { turn?: number; snap?: number; scale?: number; alpha?: number; top?: boolean; above?: boolean } = {}): void {
     const { key, size } = this.propTexture(name);
     let img = this.props.get(slot);
     if (!img) {
@@ -901,7 +900,7 @@ export class RaceScene extends Phaser.Scene {
       .setRotation(turn)
       .setScale(size * (opts.scale ?? 1))
       .setAlpha(opts.alpha ?? 1)
-      .setDepth(opts.top ? 31 : 9)
+      .setDepth((opts.top ? 31 : 9) + (opts.above ? 0.5 : 0))
       .setVisible(true);
     this.propsUsed.add(slot);
   }
@@ -1183,20 +1182,16 @@ export class RaceScene extends Phaser.Scene {
         const frame = foe.mode === 3 ? CHASER_FRAME.dazed : foe.mode !== 0 ? CHASER_FRAME.awake : CHASER_FRAME.asleep;
         this.prop(`chaser-${foe.index}`, 'chaser', frame, x, y, { turn: foe.angle, scale: (k * config.enemies.chaser.radius) / 0.4 });
       } else {
-        // A turret: a square base and a barrel that glows while it whirs.
-        const s = PX * 0.36 * k;
-        g.fillStyle(0x3a4252, 1).fillRect(x - s, y - s, s * 2, s * 2);
-        g.lineStyle(2, 0x10131a, 1).strokeRect(x - s, y - s, s * 2, s * 2);
-        g.lineStyle(6, foe.mode === 1 ? 0xff9f1c : 0xaab4c8, 1);
-        g.lineBetween(x, y, x + Math.cos(foe.angle) * PX * 0.55 * k, y + Math.sin(foe.angle) * PX * 0.55 * k);
-        g.fillStyle(foe.mode === 1 ? 0xff9f1c : 0x5d6a80, 1).fillCircle(x, y, s * 0.55);
+        // A turret: an iron base, and a head turned to its aim that glows while it charges.
+        const scale = k * 0.9;
+        this.prop(`turret-${foe.index}`, 'turret', TURRET_FRAME.base, x, y, { scale });
+        this.prop(`turret-head-${foe.index}`, 'turret', foe.mode === 1 ? TURRET_FRAME.charging : TURRET_FRAME.head, x, y, { turn: foe.angle, snap: 16, scale, above: true });
       }
     }
-    for (const b of this.driver.bolts()) {
-      if (!this.isVisibleTile(b.x, b.y)) continue;
-      g.fillStyle(0xffb347, 0.35).fillCircle(b.x * PX, b.y * PX, config.enemies.turret.boltRadius * PX * 2);
-      g.fillStyle(0xfff0c2, 1).fillCircle(b.x * PX, b.y * PX, config.enemies.turret.boltRadius * PX);
-    }
+    this.driver.bolts().forEach((b, i) => {
+      if (!this.isVisibleTile(b.x, b.y)) return;
+      this.prop(`bolt-${i}`, 'turret', TURRET_FRAME.bolt, b.x * PX, b.y * PX, { scale: config.enemies.turret.boltRadius / 0.2, above: true });
+    });
   }
 
   /**
@@ -1319,24 +1314,21 @@ export class RaceScene extends Phaser.Scene {
         }
         if (this.isVisibleTile(o.x, o.y)) g.fillStyle(0x10131a, 1).fillCircle(o.x * PX, o.y * PX, 5);
       } else {
-        if (!this.isVisibleTile(o.x + 0.5, o.y + 0.5) && !this.isVisibleTile(o.x + o.w - 0.5, o.y + o.h - 0.5)) return;
-        const x = o.x * PX;
-        const y = o.y * PX;
-        const w = o.w * PX;
-        const h = o.h * PX;
-        if (gateClosed(config, o, t)) {
-          // Closed: bars across the opening.
-          g.fillStyle(0x10131a, 0.55).fillRect(x, y, w, h);
-          g.lineStyle(4, COLOR.gate, 1);
-          const across = o.w < o.h;
-          for (let i = 1; i <= 3; i++) {
-            if (across) g.lineBetween(x, y + (h * i) / 4, x + w, y + (h * i) / 4);
-            else g.lineBetween(x + (w * i) / 4, y, x + (w * i) / 4, y + h);
-          }
-          g.lineStyle(2, COLOR.gate, 1).strokeRect(x + 1, y + 1, w - 2, h - 2);
-        } else {
-          // Open: only the frame shows.
-          g.lineStyle(2, COLOR.gate, 0.45).strokeRect(x + 1, y + 1, w - 2, h - 2);
+        // Drawn tile by tile, lying along its long side, with a post at each end.
+        const frame = gateClosed(config, o, t) ? GATE_FRAME.closed : GATE_FRAME.open;
+        const along = o.w >= o.h;
+        const turn = along ? 0 : Math.PI / 2;
+        const n = along ? o.w : o.h;
+        for (let j = 0; j < n; j++) {
+          const cx = (along ? o.x + j : o.x) + 0.5;
+          const cy = (along ? o.y : o.y + j) + 0.5;
+          if (this.isVisibleTile(cx, cy)) this.prop(`gate-${i}-${j}`, 'gate', frame, cx * PX, cy * PX, { turn });
+        }
+        for (const end of [0, n]) {
+          const px = along ? o.x + end : o.x + 0.5;
+          const py = along ? o.y + 0.5 : o.y + end;
+          const near = along ? { x: o.x + Math.min(end, n - 1) + 0.5, y: py } : { x: px, y: o.y + Math.min(end, n - 1) + 0.5 };
+          if (this.isVisibleTile(near.x, near.y)) this.prop(`gate-${i}-post${end}`, 'gate', GATE_FRAME.post, px * PX, py * PX, { scale: 0.75, above: true });
         }
       }
     });

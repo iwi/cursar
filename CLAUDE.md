@@ -32,7 +32,7 @@ Run `npm run typecheck` and `npm test` before calling any change done.
 - The server is authoritative and trusts nothing: validate every client message in `parseClientMessage`. During a race, never send a player anything outside their own view (rivals, footprints) – see `sendSnapshots`.
 - Changing message shapes means bumping `PROTOCOL_VERSION`. Changing the map generator means bumping `GENERATOR_VERSION` (saved ghosts are keyed by map id).
 - New rules come with tests. Server tests use a fixed seed (`fixture`) so they are deterministic.
-- Two looks, chosen on the entry screen: pixel art (default) and a hand-drawn map, painted in `game/looks.ts`, with flags, coins, boulders, enemies and traps as sprites from `game/props.ts` (see DECISIONS 4d). Turrets, barriers, gates, doors and the editor still use the earlier placeholder shapes.
+- Two looks, chosen on the entry screen: pixel art (default) and a hand-drawn map, painted in `game/looks.ts`, with flags, coins, boulders, enemies (turrets and bolts too), gates and traps as sprites from `game/props.ts` (see DECISIONS 4d). Barriers, doors and the editor still use the earlier placeholder shapes.
 
 ## Where the project is
 
