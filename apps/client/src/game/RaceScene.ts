@@ -42,6 +42,7 @@ import {
   paintPixelLandmark,
   paintPixelRunner,
 } from './looks';
+import { CHASER_FRAME, FLAG_DONE, type PropName, paintProp } from './props';
 
 export interface RaceSceneData {
   map: GameMap;
@@ -71,8 +72,6 @@ const COLOR = {
   finishArrow: 0x7ee08a,
   checkpoint: 0xff4f9a,
   checkpointDone: 0x8a93a6,
-  boulder: 0x9b7b5a,
-  boulderEdge: 0x4a3826,
   barrier: 0xe8b04a,
   gate: 0xc9d2e3,
 };
@@ -205,6 +204,9 @@ export class RaceScene extends Phaser.Scene {
   private sprites = new Map<string, Phaser.GameObjects.Image>();
   /** Per runner: where it was last frame, how far it has run (for the run cycle) and whether it is moving. */
   private strides = new Map<string, { x: number; y: number; dist: number; still: number }>();
+  /** Sprites for flags, coins, boulders, enemies and traps, by slot ('coin-3', 'trap-0'…); hidden when not drawn in a frame. */
+  private props = new Map<string, Phaser.GameObjects.Image>();
+  private propsUsed = new Set<string>();
 
   constructor(data: RaceSceneData) {
     super('race');
@@ -860,6 +862,50 @@ export class RaceScene extends Phaser.Scene {
     return { phase: (s.dist / 1.15) * Math.PI * 2, moving: s.still < 4 };
   }
 
+  /** The sprite sheet for a prop in the chosen look, made the first time it is needed. */
+  private propTexture(name: PropName): { key: string; size: number } {
+    const key = `prop-${name}`;
+    if (!this.textures.exists(key)) {
+      const sheet = paintProp(this.look, name);
+      const tex = this.textures.addCanvas(key, sheet.canvas)!;
+      if (this.look === 'pixel') tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      for (let f = 0; f < sheet.frames; f++) tex.add(f, 0, f * sheet.frame, 0, sheet.frame, sheet.frame);
+      tex.customData = { size: (sheet.tiles * PX) / sheet.frame };
+    }
+    return { key, size: (this.textures.get(key).customData as { size: number }).size };
+  }
+
+  /**
+   * Places a prop sprite for this frame. `turn` is a facing (pixel art snaps it
+   * to `snap` steps a turn); `scale` enlarges it on the whole-map views; `top`
+   * draws it above the fog (for things the Reveal skill shows).
+   */
+  private prop(slot: string, name: PropName, frame: number, x: number, y: number, opts: { turn?: number; snap?: number; scale?: number; alpha?: number; top?: boolean } = {}): void {
+    const { key, size } = this.propTexture(name);
+    let img = this.props.get(slot);
+    if (!img) {
+      img = this.add.image(0, 0, key, frame);
+      this.props.set(slot, img);
+    }
+    if (img.texture.key !== key) img.setTexture(key, frame);
+    let turn = opts.turn ?? 0;
+    if (this.look === 'pixel') {
+      const step = (Math.PI * 2) / (opts.snap ?? 8);
+      turn = Math.round(turn / step) * step;
+      x = Math.round(x);
+      y = Math.round(y);
+    }
+    img
+      .setFrame(frame)
+      .setPosition(x, y)
+      .setRotation(turn)
+      .setScale(size * (opts.scale ?? 1))
+      .setAlpha(opts.alpha ?? 1)
+      .setDepth(opts.top ? 31 : 9)
+      .setVisible(true);
+    this.propsUsed.add(slot);
+  }
+
   /**
    * One runner in the chosen look: a pixel-art sprite turned to the nearest of
    * eight directions, or an ink figure. `scale` enlarges it on the whole-map views.
@@ -935,6 +981,7 @@ export class RaceScene extends Phaser.Scene {
     const racing = this.racingView();
     const mine = me.color;
     const used = new Set<string>();
+    this.propsUsed.clear();
 
     // Checkpoints: pink flags until touched, then a grey tick.
     const preview = state.phase === 'preview';
@@ -945,16 +992,20 @@ export class RaceScene extends Phaser.Scene {
       const zh = zone.h * PX;
       const cx = zx + zw / 2;
       const cy = zy + zh / 2;
+      const flagScale = 1.5;
       if (me.checkpoints[index]) {
-        g.lineStyle(3, COLOR.checkpointDone, 0.9).strokeRect(zx + 2, zy + 2, zw - 4, zh - 4);
-        g.lineStyle(5, COLOR.checkpointDone, 0.9).beginPath();
-        g.moveTo(cx - 14, cy).lineTo(cx - 4, cy + 11).lineTo(cx + 15, cy - 12).strokePath();
+        g.lineStyle(this.look === 'map' ? 2 : 3, COLOR.checkpointDone, 0.9).strokeRect(zx + 2, zy + 2, zw - 4, zh - 4);
+        this.prop(`flag-${index}`, 'flag', FLAG_DONE, cx, cy, { scale: flagScale });
         return;
       }
-      g.fillStyle(COLOR.checkpoint, 0.28).fillRect(zx, zy, zw, zh);
-      g.lineStyle(3, COLOR.checkpoint, 1).strokeRect(zx + 1.5, zy + 1.5, zw - 3, zh - 3);
-      g.fillStyle(0xffffff, 1).fillRect(cx - 12, cy - 20, 4, 40);
-      g.fillStyle(COLOR.checkpoint, 1).fillTriangle(cx - 8, cy - 20, cx + 18, cy - 9, cx - 8, cy + 2);
+      if (this.look === 'map') {
+        g.fillStyle(COLOR.checkpoint, 0.14).fillRect(zx, zy, zw, zh);
+        g.lineStyle(2.5, 0xc2306f, 0.9).strokeRect(zx + 2, zy + 2, zw - 4, zh - 4);
+      } else {
+        g.fillStyle(COLOR.checkpoint, 0.24).fillRect(zx, zy, zw, zh);
+        g.lineStyle(2, COLOR.checkpoint, 1).strokeRect(zx + 1, zy + 1, zw - 2, zh - 2);
+      }
+      this.prop(`flag-${index}`, 'flag', Math.floor(this.time.now / 260 + index) % 2, cx, cy, { scale: flagScale });
       if (preview) g.lineStyle(4, COLOR.checkpoint, 0.9).strokeCircle(cx, cy, PX * 2 + Math.sin(this.time.now / 220 + index) * 5);
     });
 
@@ -992,9 +1043,9 @@ export class RaceScene extends Phaser.Scene {
 
     this.drawTreasures(g);
     this.drawDoors(g);
-    this.drawTraps(g, top);
+    this.drawTraps();
     this.drawObstacles(g);
-    this.drawEnemies(g, top);
+    this.drawEnemies(g);
 
     // Rivals. In a race the server only sends the ones inside your view.
     const r = state.config.player.radius * PX;
@@ -1064,6 +1115,7 @@ export class RaceScene extends Phaser.Scene {
 
     if (racing) this.drawEffects(top, x, y, r, me.effects);
     for (const [id, sprite] of this.sprites) if (!used.has(id)) sprite.setVisible(false);
+    for (const [slot, img] of this.props) if (!this.propsUsed.has(slot)) img.setVisible(false);
     this.drawYou(top, x, y, r * scale);
 
     // Waypoint flags (the player's own notes, so they show through the fog).
@@ -1094,7 +1146,7 @@ export class RaceScene extends Phaser.Scene {
    * turrets and bolts come from the driver (in network play, only those in
    * view). During the race only what is inside your view is drawn.
    */
-  private drawEnemies(g: Phaser.GameObjects.Graphics, top: Phaser.GameObjects.Graphics): void {
+  private drawEnemies(g: Phaser.GameObjects.Graphics): void {
     const { state } = this;
     const { config } = state;
     const spawns = this.data_.map.enemies ?? [];
@@ -1102,7 +1154,7 @@ export class RaceScene extends Phaser.Scene {
     // Larger on the whole-map views, so they can be picked out and remembered.
     const whole = !this.racingView() || this.peeking();
     const k = whole ? 1.8 : 1;
-    spawns.forEach((e) => {
+    spawns.forEach((e, index) => {
       if (e.kind !== 'patroller') return;
       if (whole) {
         // The beat it walks.
@@ -1113,16 +1165,8 @@ export class RaceScene extends Phaser.Scene {
       const me = this.me();
       const revealed = !this.isVisibleTile(at.x, at.y) && this.revealing() && Math.hypot(at.x - me.x, at.y - me.y) <= config.skills.reveal.range;
       if (!this.isVisibleTile(at.x, at.y) && !revealed) return;
-      const pen = revealed ? top : g;
-      const r = config.enemies.patroller.radius * PX * k;
-      const x = at.x * PX;
-      const y = at.y * PX;
-      const heading = at.heading;
-      // A purple diamond with a pointer.
-      const pts = [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2].map((a) => ({ x: x + Math.cos(a + heading) * r * 1.25, y: y + Math.sin(a + heading) * r * 1.25 }));
-      pen.fillStyle(0x8e5bd6, 1).fillPoints(pts, true);
-      pen.lineStyle(2, 0x2a1640, 1).strokePoints(pts, true, true);
-      pen.fillStyle(0xffe066, 1).fillCircle(x, y, r * 0.35);
+      const walk = Math.floor(this.time.now / 220 + index) % 2;
+      this.prop(`patroller-${index}`, 'patroller', walk, at.x * PX, at.y * PX, { turn: at.heading, scale: (k * config.enemies.patroller.radius) / 0.35, top: revealed });
     });
     // The full map during the race shows where turrets stand and chasers live
     // (that is part of the map), never where a chaser is now.
@@ -1135,22 +1179,9 @@ export class RaceScene extends Phaser.Scene {
       const x = foe.x * PX;
       const y = foe.y * PX;
       if (spawn.kind === 'chaser') {
-        const r = config.enemies.chaser.radius * PX * k;
-        const awake = foe.mode !== 0;
-        const dazed = foe.mode === 3;
-        g.fillStyle(dazed ? 0xa0605a : awake ? 0xd9342b : 0x7a2a26, 1).fillCircle(x, y, r);
-        g.lineStyle(2, 0x2b0907, 1).strokeCircle(x, y, r);
-        // Eyes: open and looking ahead when awake, shut when asleep.
-        for (const side of [-0.45, 0.45]) {
-          const ex = x + Math.cos(foe.angle + side) * r * 0.55;
-          const ey = y + Math.sin(foe.angle + side) * r * 0.55;
-          if (dazed) {
-            // Dazed after a shove: crossed eyes.
-            g.lineStyle(2, 0xfff3a0, 1).lineBetween(ex - r * 0.15, ey - r * 0.15, ex + r * 0.15, ey + r * 0.15);
-            g.lineBetween(ex - r * 0.15, ey + r * 0.15, ex + r * 0.15, ey - r * 0.15);
-          } else if (awake) g.fillStyle(0xfff3a0, 1).fillCircle(ex, ey, r * 0.22);
-          else g.lineStyle(2, 0xffb3a8, 1).lineBetween(ex - r * 0.18, ey, ex + r * 0.18, ey);
-        }
+        // Asleep, awake (eyes open, teeth showing), or dazed after a shove (crossed eyes).
+        const frame = foe.mode === 3 ? CHASER_FRAME.dazed : foe.mode !== 0 ? CHASER_FRAME.awake : CHASER_FRAME.asleep;
+        this.prop(`chaser-${foe.index}`, 'chaser', frame, x, y, { turn: foe.angle, scale: (k * config.enemies.chaser.radius) / 0.4 });
       } else {
         // A turret: a square base and a barrel that glows while it whirs.
         const s = PX * 0.36 * k;
@@ -1173,7 +1204,7 @@ export class RaceScene extends Phaser.Scene {
    * trap shows only when you are close to it; a sprung one shows wherever you
    * can see it (it is safe until it re-arms).
    */
-  private drawTraps(g: Phaser.GameObjects.Graphics, top: Phaser.GameObjects.Graphics): void {
+  private drawTraps(): void {
     const { state } = this;
     const me = this.me();
     const all = !this.racingView() || this.peeking();
@@ -1185,14 +1216,14 @@ export class RaceScene extends Phaser.Scene {
       const cy = trap.y + 0.5;
       // The Reveal skill shows traps close by through the fog.
       if (!all && revealing && Math.hypot(cx - me.x, cy - me.y) <= state.config.skills.reveal.range) {
-        this.drawTrap(top, trap, armed, 1);
+        this.drawTrap(i, trap, armed, 1, true);
         return;
       }
       if (!all) {
         if (!this.isVisibleTile(cx, cy)) return;
         if (armed && Math.hypot(cx - me.x, cy - me.y) > reveal) return;
       }
-      this.drawTrap(g, trap, armed, all ? 1.8 : 1);
+      this.drawTrap(i, trap, armed, all ? 1.8 : 1, false);
     });
   }
 
@@ -1206,15 +1237,12 @@ export class RaceScene extends Phaser.Scene {
     const me = this.me();
     const whole = !this.racingView() || this.peeking();
     const k = whole ? 1.8 : 1;
-    const spin = Math.abs(Math.sin(this.time.now / 300));
     (this.data_.map.treasures ?? []).forEach((t, i) => {
       if (me.treasures[i]) return;
       const x = t.x * PX;
       const y = t.y * PX;
-      const r = PX * 0.28 * k;
-      g.fillStyle(0xffd23f, 0.25).fillCircle(x, y, r * 1.6);
-      g.fillStyle(0xffc21a, 1).fillEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
-      g.lineStyle(2, 0x8a5a00, 1).strokeEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
+      g.fillStyle(0xffd23f, this.look === 'map' ? 0.18 : 0.22).fillCircle(x, y, PX * 0.45 * k);
+      this.prop(`coin-${i}`, 'coin', Math.floor(this.time.now / 140 + i) % 4, x, y, { scale: k });
     });
   }
 
@@ -1257,66 +1285,9 @@ export class RaceScene extends Phaser.Scene {
     });
   }
 
-  /** One trap: a dark plate with the kind's sign. `k` scales it up on the whole-map views, so it can be picked out. */
-  private drawTrap(g: Phaser.GameObjects.Graphics, trap: Trap, armed: boolean, k: number): void {
-    const { color } = TRAP_STYLE[trap.kind];
-    const alpha = armed ? 1 : 0.35;
-    const cx = (trap.x + 0.5) * PX;
-    const cy = (trap.y + 0.5) * PX;
-    const half = (PX / 2 - 3) * k;
-    const at = (dx: number, dy: number) => ({ x: cx + dx * k, y: cy + dy * k });
-    g.fillStyle(0x10131a, 0.8 * alpha).fillRoundedRect(cx - half, cy - half, half * 2, half * 2, 5 * k);
-    g.lineStyle(2 * Math.min(k, 1.6), color, alpha).strokeRoundedRect(cx - half, cy - half, half * 2, half * 2, 5 * k);
-    g.fillStyle(color, alpha);
-    g.lineStyle(2.5 * Math.min(k, 1.6), color, alpha);
-    const line = (x0: number, y0: number, x1: number, y1: number) => {
-      const a = at(x0, y0);
-      const b = at(x1, y1);
-      g.lineBetween(a.x, a.y, b.x, b.y);
-    };
-    const tri = (x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) => {
-      const a = at(x0, y0);
-      const b = at(x1, y1);
-      const c = at(x2, y2);
-      g.fillTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
-    };
-    switch (trap.kind) {
-      case 'spikes':
-        for (const ox of [-7, 0, 7]) tri(ox - 3.5, 6, ox, -6, ox + 3.5, 6);
-        break;
-      case 'snare':
-        g.strokeCircle(cx, cy, 7 * k);
-        for (let n = 0; n < 6; n++) {
-          const a = (n * Math.PI) / 3;
-          line(Math.cos(a) * 7, Math.sin(a) * 7, Math.cos(a) * 3.5, Math.sin(a) * 3.5);
-        }
-        break;
-      case 'glue':
-        g.fillCircle(cx - 3 * k, cy + 1 * k, 5 * k);
-        g.fillCircle(cx + 3 * k, cy - 1 * k, 4 * k);
-        g.fillCircle(cx + 4 * k, cy + 5 * k, 2.5 * k);
-        break;
-      case 'flash':
-        line(-8, 0, 8, 0);
-        line(0, -8, 0, 8);
-        line(-5, -5, 5, 5);
-        line(-5, 5, 5, -5);
-        break;
-      case 'reverse':
-        line(-7, -3, 7, -3);
-        tri(7, -6, 10, -3, 7, 0);
-        line(-7, 4, 7, 4);
-        tri(-7, 1, -10, 4, -7, 7);
-        break;
-      case 'confuse':
-        g.beginPath();
-        g.arc(cx, cy, 7 * k, 0, Math.PI * 1.5, false);
-        g.strokePath();
-        g.beginPath();
-        g.arc(cx, cy, 3.5 * k, Math.PI, Math.PI * 2.6, false);
-        g.strokePath();
-        break;
-    }
+  /** One trap: a plate with the kind's sign, faint while sprung. `k` scales it up on the whole-map views, so it can be picked out. */
+  private drawTrap(index: number, trap: Trap, armed: boolean, k: number, top: boolean): void {
+    this.prop(`trap-${index}`, `trap-${trap.kind}`, 0, (trap.x + 0.5) * PX, (trap.y + 0.5) * PX, { scale: k, alpha: armed ? 1 : 0.35, top });
   }
 
   /**
@@ -1327,19 +1298,14 @@ export class RaceScene extends Phaser.Scene {
     const { state } = this;
     const { config } = state;
     const t = obstacleTime(state);
-    for (const o of this.data_.map.obstacles ?? []) {
+    (this.data_.map.obstacles ?? []).forEach((o, i) => {
       if (o.kind === 'boulder') {
         const b = boulderPosition(config, o, t);
-        if (!this.isVisibleTile(b.x, b.y)) continue;
-        const r = config.obstacles.boulder.radius * PX;
-        g.fillStyle(COLOR.boulder, 1).fillCircle(b.x * PX, b.y * PX, r);
-        g.lineStyle(3, COLOR.boulderEdge, 1).strokeCircle(b.x * PX, b.y * PX, r);
-        // A groove that turns as it rolls.
+        if (!this.isVisibleTile(b.x, b.y)) return;
+        // It turns as it rolls, so its cracks show it moving.
         const along = Math.hypot(b.x - o.ax, b.y - o.ay) / config.obstacles.boulder.radius;
-        const vertical = o.ax === o.bx;
-        const a = vertical ? along : -along;
-        g.lineStyle(3, COLOR.boulderEdge, 0.8).beginPath();
-        g.arc(b.x * PX, b.y * PX, r * 0.6, a, a + Math.PI * 0.8, false).strokePath();
+        const a = o.ax === o.bx ? along : -along;
+        this.prop(`boulder-${i}`, 'boulder', 0, b.x * PX, b.y * PX, { turn: a, snap: 16, scale: config.obstacles.boulder.radius / 0.9 });
       } else if (o.kind === 'barrier') {
         const [a, b] = barrierEnds(config, o, t);
         const steps = 10;
@@ -1353,7 +1319,7 @@ export class RaceScene extends Phaser.Scene {
         }
         if (this.isVisibleTile(o.x, o.y)) g.fillStyle(0x10131a, 1).fillCircle(o.x * PX, o.y * PX, 5);
       } else {
-        if (!this.isVisibleTile(o.x + 0.5, o.y + 0.5) && !this.isVisibleTile(o.x + o.w - 0.5, o.y + o.h - 0.5)) continue;
+        if (!this.isVisibleTile(o.x + 0.5, o.y + 0.5) && !this.isVisibleTile(o.x + o.w - 0.5, o.y + o.h - 0.5)) return;
         const x = o.x * PX;
         const y = o.y * PX;
         const w = o.w * PX;
@@ -1373,7 +1339,7 @@ export class RaceScene extends Phaser.Scene {
           g.lineStyle(2, COLOR.gate, 0.45).strokeRect(x + 1, y + 1, w - 2, h - 2);
         }
       }
-    }
+    });
   }
 
   /**
