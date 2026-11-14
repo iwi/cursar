@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { GameMap, Obstacle, Point } from '../map/types';
+import { type GameMap, type Obstacle, type Point, eitherBlocks, lockedDoors } from '../map/types';
 import { applyEffect } from './effects';
 import { damage } from './health';
 import { resolveWalls } from './movement';
@@ -128,7 +128,7 @@ export function knock(
   p.y = y;
   p.vx = nx * speed;
   p.vy = ny * speed;
-  resolveWalls(map, p, config.player.radius, fromX, fromY, closedGateCheck(map, config, obstacleTime(state)));
+  resolveWalls(map, p, config.player.radius, fromX, fromY, eitherBlocks(closedGateCheck(map, config, obstacleTime(state)), lockedDoors(map, p.keys)));
   const before = events.length;
   damage(config, p, hearts, events);
   const respawned = events.slice(before).some((e) => e.type === 'respawn');

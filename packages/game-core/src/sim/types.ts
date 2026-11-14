@@ -74,6 +74,8 @@ export interface PlayerState {
   hitGuard: number;
   /** One flag per map treasure: true once this runner has collected it. */
   treasures: boolean[];
+  /** One flag per door: true once this runner holds its key (kept after a respawn). */
+  keys: boolean[];
   /** Points to spend on skills. */
   points: number;
   /** Skills taken this race. */
@@ -197,6 +199,10 @@ export type GameEvent =
   /** An enemy sound as one listener hears it: a direction and loudness, never a position. `aimed`: it is after you. */
   | { type: 'foeHeard'; sound: FoeSound; pan: number; closeness: number; aimed: boolean }
   | { type: 'treasure'; playerId: string; index: number; points: number }
+  /** Picked up the key to door `index`. */
+  | { type: 'key'; playerId: string; index: number }
+  /** Ran into door `index` without its key. */
+  | { type: 'doorLocked'; playerId: string; index: number }
   /** Three cards on offer at a checkpoint. */
   | { type: 'offer'; playerId: string; cards: SkillId[] }
   | { type: 'skill'; playerId: string; skill: SkillId }

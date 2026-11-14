@@ -8,7 +8,6 @@ import {
   type Obstacle,
   TERRAIN,
   type Trap,
-  Tile,
   computeVisibility,
   createAutopilot,
   barrierAngle,
@@ -30,6 +29,19 @@ import type { AudioEngine } from '../audio/AudioEngine';
 import type { Bridge } from './bridge';
 import type { MoveIntent, RaceDriver, Track } from './driver';
 import { DEFAULT_BINDINGS, type KeyBindings } from './input';
+import {
+  type Look,
+  LOOK_THEME,
+  PIXEL_TILE,
+  RED_INK,
+  drawInkRunner,
+  inkTileSize,
+  paintInkGround,
+  paintInkLandmark,
+  paintPixelGround,
+  paintPixelLandmark,
+  paintPixelRunner,
+} from './looks';
 
 export interface RaceSceneData {
   map: GameMap;
@@ -43,6 +55,8 @@ export interface RaceSceneData {
   mouseMove?: boolean;
   /** Developer aid: the runner follows the shortest route by itself. */
   demo?: boolean;
+  /** How the race is drawn (pixel art unless chosen otherwise). */
+  look?: Look;
 }
 
 /** Pixels per tile at zoom 1. Purely a rendering choice: the simulation works in tiles. */
@@ -53,16 +67,6 @@ const MOUSE_ARRIVE_TILES = 0.3;
 const TILES_ACROSS = 15;
 
 const COLOR = {
-  background: 0x0b0d12,
-  floor: 0x262c38,
-  floorAlt: 0x2a313e,
-  wall: 0x5d6a80,
-  wallTop: 0x78869e,
-  mud: 0x5b4429,
-  mudSpot: 0x6d5434,
-  ice: 0x8ecbe0,
-  iceShine: 0xc4e9f5,
-  start: 0x3a4a63,
   ghost: 0xffffff,
   finishArrow: 0x7ee08a,
   checkpoint: 0xff4f9a,
@@ -72,6 +76,28 @@ const COLOR = {
   barrier: 0xe8b04a,
   gate: 0xc9d2e3,
 };
+
+/** A landmark fades while a runner is this close to its centre (tiles). */
+const LANDMARK_FADE_TILES = 1.6;
+/** The landmark tip shows the first time a new player comes this close to one in a race. */
+const LANDMARK_TIP_TILES = 3;
+const LANDMARK_TIP_KEY = 'cursar.tips.landmark';
+
+function landmarkTipSeen(): boolean {
+  try {
+    return localStorage.getItem(LANDMARK_TIP_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Each door and its key share a colour (and a name, for notices). */
+export const DOOR_STYLE = [
+  { color: 0x4dabff, name: 'blue' },
+  { color: 0xff7a3d, name: 'orange' },
+  { color: 0x7ee08a, name: 'green' },
+  { color: 0xd98cff, name: 'violet' },
+] as const;
 
 /**
  * One colour per plaza. The shape says what kind of landmark it is; the colour
@@ -160,6 +186,9 @@ export class RaceScene extends Phaser.Scene {
   private heartTimer = 0;
   private warnedSecond = -1;
   private ghostStride = 0;
+  /** One layer per landmark, faded while a runner is over it. */
+  private landmarkGfx: Phaser.GameObjects.Image[] = [];
+  private landmarkTipShown = landmarkTipSeen();
   private ghostLast: { x: number; y: number } | null = null;
   private rumbleTimer = 0;
   private tellTimer = 0;
@@ -171,6 +200,11 @@ export class RaceScene extends Phaser.Scene {
   /** Per obstacle: the last quarter turn of a barrier, or whether a gate was closed, for their sounds. */
   private obstacleMarks = new Map<Obstacle, number>();
   private unsubscribe: (() => void)[] = [];
+  private look: Look = 'pixel';
+  /** Pixel art: one sprite per runner on screen, by runner id ('me', 'ghost' or a rival's id). */
+  private sprites = new Map<string, Phaser.GameObjects.Image>();
+  /** Per runner: where it was last frame, how far it has run (for the run cycle) and whether it is moving. */
+  private strides = new Map<string, { x: number; y: number; dist: number; still: number }>();
 
   constructor(data: RaceSceneData) {
     super('race');
@@ -187,7 +221,8 @@ export class RaceScene extends Phaser.Scene {
     this.seenAt = new Float32Array(size).fill(-1e9);
     this.fog = new Float32Array(size);
 
-    this.cameras.main.setBackgroundColor(COLOR.background);
+    this.look = this.data_.look ?? 'pixel';
+    this.cameras.main.setBackgroundColor(LOOK_THEME[this.look].background);
     this.drawMap();
     this.entityGfx = this.add.graphics().setDepth(10);
     this.fogGfx = this.add.graphics().setDepth(20);
@@ -325,6 +360,7 @@ export class RaceScene extends Phaser.Scene {
     this.updateCamera(x, y, dt);
     this.updateFog(dt);
     this.drawEntities(x, y);
+    this.fadeLandmarks(dt, x, y);
 
     if (this.frame++ % 2 === 0) this.emitHud();
   }
@@ -449,6 +485,18 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'treasure':
         if (event.playerId === me.id) audio.treasure();
+        break;
+      case 'key':
+        if (event.playerId === me.id) {
+          audio.key();
+          bridge.emit('notice', `The ${DOOR_STYLE[event.index % DOOR_STYLE.length]!.name} key: its door opens for you`);
+        }
+        break;
+      case 'doorLocked':
+        if (event.playerId === me.id) {
+          audio.doorLocked();
+          bridge.emit('notice', `Locked: find the ${DOOR_STYLE[event.index % DOOR_STYLE.length]!.name} key`);
+        }
         break;
       case 'offer':
         if (event.playerId === me.id) audio.offer();
@@ -745,7 +793,7 @@ export class RaceScene extends Phaser.Scene {
         }
         const value = (fog[i] = fog[i]! + (target - fog[i]!) * blend);
         if (value > 0.01) {
-          this.fogGfx.fillStyle(COLOR.background, Math.min(1, value));
+          this.fogGfx.fillStyle(LOOK_THEME[this.look].fog, Math.min(1, value));
           this.fogGfx.fillRect(tx * PX, ty * PX, PX, PX);
         }
       }
@@ -764,48 +812,103 @@ export class RaceScene extends Phaser.Scene {
 
   // --- Drawing ------------------------------------------------------------
 
+  /** The map, painted once in the chosen look and shown as one image. Landmarks get a layer each, so they can fade. */
   private drawMap(): void {
     const { map } = this.data_;
-    const g = this.add.graphics().setDepth(0);
-    for (let ty = 0; ty < map.height; ty++) {
-      for (let tx = 0; tx < map.width; tx++) {
-        const code = map.tiles[ty * map.width + tx]!;
-        const x = tx * PX;
-        const y = ty * PX;
-        if (code === Tile.Wall) {
-          g.fillStyle(COLOR.wall).fillRect(x, y, PX, PX);
-          // Light edge only where the wall borders open ground above it.
-          if (ty > 0 && map.tiles[(ty - 1) * map.width + tx] !== Tile.Wall) g.fillStyle(COLOR.wallTop).fillRect(x, y, PX, 6);
-        } else if (code === Tile.Mud) {
-          g.fillStyle(COLOR.mud).fillRect(x, y, PX, PX);
-          g.fillStyle(COLOR.mudSpot).fillCircle(x + 9, y + 11, 4).fillCircle(x + 22, y + 21, 5);
-        } else if (code === Tile.Ice) {
-          g.fillStyle(COLOR.ice).fillRect(x, y, PX, PX);
-          g.lineStyle(2, COLOR.iceShine, 0.9).lineBetween(x + 6, y + 22, x + 18, y + 8).lineBetween(x + 18, y + 26, x + 26, y + 16);
-        } else {
-          g.fillStyle((tx + ty) % 2 === 0 ? COLOR.floor : COLOR.floorAlt).fillRect(x, y, PX, PX);
-        }
-      }
-    }
-
-    // Start plaza marking.
-    for (const p of map.startPositions) {
-      g.lineStyle(2, COLOR.start, 1).strokeCircle(p.x * PX, p.y * PX, PX * 0.38);
-    }
-
-    // Finish zone: chequered flag pattern.
-    const f = map.finish;
-    const cell = PX / 2;
-    for (let cy = 0; cy < f.h * 2; cy++) {
-      for (let cx = 0; cx < f.w * 2; cx++) {
-        g.fillStyle((cx + cy) % 2 === 0 ? 0xf2f2f2 : 0x16181d).fillRect(f.x * PX + cx * cell, f.y * PX + cy * cell, cell, cell);
-      }
-    }
-    g.lineStyle(3, COLOR.finishArrow, 1).strokeRect(f.x * PX, f.y * PX, f.w * PX, f.h * PX);
+    const pixel = this.look === 'pixel';
+    const T = pixel ? PIXEL_TILE : inkTileSize(map);
+    const texture = (key: string, source: HTMLCanvasElement) => {
+      const tex = this.textures.addCanvas(key, source)!;
+      if (pixel) tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      return key;
+    };
+    const ground = pixel ? paintPixelGround(map) : paintInkGround(map, T);
+    this.add.image(0, 0, texture('ground', ground)).setOrigin(0, 0).setScale(PX / T).setDepth(0);
 
     // Landmarks: the shape gives the kind, the colour picks out the plaza.
     const tints = plazaTints(map.landmarks);
-    map.landmarks.forEach((mark, i) => this.drawLandmark(g, mark, tints[i]!));
+    this.landmarkGfx = map.landmarks.map((mark, i) => {
+      const source = pixel ? paintPixelLandmark(mark, tints[i]!) : paintInkLandmark(mark, tints[i]!, T);
+      return this.add.image(mark.x * PX, mark.y * PX, texture(`landmark-${i}`, source)).setScale(PX / T).setDepth(1);
+    });
+  }
+
+  /** The pixel-art sprite sheet for a shirt colour, made the first time it is needed. */
+  private runnerTexture(color: number): string {
+    const key = `runner-${color.toString(16)}`;
+    if (!this.textures.exists(key)) {
+      const tex = this.textures.addCanvas(key, paintPixelRunner(color))!;
+      tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      for (let f = 0; f < 5; f++) tex.add(f, 0, f * PIXEL_TILE, 0, PIXEL_TILE, PIXEL_TILE);
+    }
+    return key;
+  }
+
+  /** How far a runner has run (tiles) and whether it is moving, from its position each frame. */
+  private stride(id: string, x: number, y: number): { phase: number; moving: boolean } {
+    let s = this.strides.get(id);
+    if (!s) {
+      s = { x, y, dist: 0, still: 99 };
+      this.strides.set(id, s);
+    }
+    const step = Math.hypot(x - s.x, y - s.y);
+    // A jump (a respawn) is not running.
+    if (step < 1) s.dist += step;
+    s.still = step > 0.004 ? 0 : s.still + 1;
+    s.x = x;
+    s.y = y;
+    return { phase: (s.dist / 1.15) * Math.PI * 2, moving: s.still < 4 };
+  }
+
+  /**
+   * One runner in the chosen look: a pixel-art sprite turned to the nearest of
+   * eight directions, or an ink figure. `scale` enlarges it on the whole-map views.
+   */
+  private drawRunner(g: Phaser.GameObjects.Graphics, id: string, x: number, y: number, facing: number, color: number, scale: number, alpha: number, used: Set<string>): void {
+    const { phase, moving } = this.stride(id, x / PX, y / PX);
+    if (this.look === 'map') {
+      drawInkRunner(g, x, y, facing, phase, color, PX * 1.15 * scale, moving, this.time.now / 1000, alpha);
+      return;
+    }
+    let sprite = this.sprites.get(id);
+    if (!sprite) {
+      sprite = this.add.image(0, 0, this.runnerTexture(color), 4).setDepth(12);
+      this.sprites.set(id, sprite);
+    }
+    const key = this.runnerTexture(color);
+    if (sprite.texture.key !== key) sprite.setTexture(key);
+    const frame = moving ? Math.floor((((phase / (Math.PI * 2)) * 4) % 4) + 4) % 4 : 4;
+    const turn = Math.round(facing / (Math.PI / 4)) * (Math.PI / 4);
+    sprite.setFrame(frame).setPosition(Math.round(x), Math.round(y)).setRotation(turn).setScale((PX / PIXEL_TILE) * scale).setAlpha(alpha).setVisible(true);
+    used.add(id);
+  }
+
+  /**
+   * Landmarks are only for remembering the way, and runners pass over them:
+   * one fades while anyone is on it. The first time a new player comes near
+   * one in a race, a tip says so.
+   */
+  private fadeLandmarks(dt: number, x: number, y: number): void {
+    const { landmarks } = this.data_.map;
+    if (landmarks.length === 0) return;
+    const runners = [{ x, y }, ...this.driver.rivals(), ...(this.driver.ghost() ? [this.driver.ghost()!] : [])];
+    landmarks.forEach((mark, i) => {
+      const layer = this.landmarkGfx[i];
+      if (!layer) return;
+      const over = runners.some((r) => Math.hypot(r.x - mark.x, r.y - mark.y) < LANDMARK_FADE_TILES);
+      const target = over ? 0.35 : 1;
+      layer.alpha += (target - layer.alpha) * Math.min(1, dt * 8);
+    });
+    if (this.landmarkTipShown || !this.racingView()) return;
+    if (landmarks.some((mark) => Math.hypot(x - mark.x, y - mark.y) < LANDMARK_TIP_TILES)) {
+      this.landmarkTipShown = true;
+      try {
+        localStorage.setItem(LANDMARK_TIP_KEY, '1');
+      } catch {
+        /* storage blocked: the tip may show again next time */
+      }
+      this.data_.bridge.emit('notice', 'Landmarks are only for remembering the way: run straight over them');
+    }
   }
 
   /** After the race: the routes taken, drawn over the revealed map. */
@@ -821,34 +924,6 @@ export class RaceScene extends Phaser.Scene {
     }
   }
 
-  private drawLandmark(g: Phaser.GameObjects.Graphics, mark: Landmark, color: number): void {
-    const x = mark.x * PX;
-    const y = mark.y * PX;
-    const r = PX * 0.8;
-    g.fillStyle(color, 0.16).fillCircle(x, y, PX * 2.1);
-    g.fillStyle(color, 1).lineStyle(3, color, 1);
-    switch (mark.kind) {
-      case 'fountain':
-        g.strokeCircle(x, y, r).fillCircle(x, y, r * 0.45);
-        break;
-      case 'statue':
-        g.fillRect(x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5);
-        break;
-      case 'tree':
-        g.fillCircle(x - r * 0.4, y + r * 0.2, r * 0.6).fillCircle(x + r * 0.4, y + r * 0.2, r * 0.6).fillCircle(x, y - r * 0.4, r * 0.65);
-        break;
-      case 'crystal':
-        g.fillPoints([{ x, y: y - r * 1.1 }, { x: x + r * 0.7, y }, { x, y: y + r * 1.1 }, { x: x - r * 0.7, y }], true);
-        break;
-      case 'brazier':
-        g.fillTriangle(x, y - r, x + r * 0.9, y + r * 0.7, x - r * 0.9, y + r * 0.7);
-        break;
-      case 'obelisk':
-        g.fillRect(x - r * 0.3, y - r * 1.1, r * 0.6, r * 2.2).fillRect(x - r * 0.9, y - r * 0.3, r * 1.8, r * 0.6);
-        break;
-    }
-  }
-
   private drawEntities(px: number, py: number): void {
     const { state } = this;
     const { map, finishArrow } = this.data_;
@@ -859,6 +934,7 @@ export class RaceScene extends Phaser.Scene {
     top.clear();
     const racing = this.racingView();
     const mine = me.color;
+    const used = new Set<string>();
 
     // Checkpoints: pink flags until touched, then a grey tick.
     const preview = state.phase === 'preview';
@@ -884,23 +960,38 @@ export class RaceScene extends Phaser.Scene {
 
     // The finish is shaded while checkpoints remain.
     if (racing && me.checkpoints.includes(false)) {
-      g.fillStyle(COLOR.background, 0.6).fillRect(map.finish.x * PX, map.finish.y * PX, map.finish.w * PX, map.finish.h * PX);
+      g.fillStyle(LOOK_THEME[this.look].fog, 0.6).fillRect(map.finish.x * PX, map.finish.y * PX, map.finish.w * PX, map.finish.h * PX);
     }
 
     // Footprints: where you have been, and where rivals have been inside your view.
     if (!this.overview()) {
       const life = state.config.footprints.lifetimeSeconds;
-      for (const print of me.footprints) {
-        if (!this.isVisibleTile(print.x, print.y)) continue;
-        g.fillStyle(mine, 0.45 * (1 - (state.raceTime - print.t) / life)).fillCircle(print.x * PX, print.y * PX, 3.5);
+      if (this.look === 'map') {
+        // Your way so far, as a dashed red line on the map.
+        const prints = me.footprints;
+        for (let i = 1; i < prints.length; i++) {
+          const a = prints[i - 1]!;
+          const b = prints[i]!;
+          if (Math.hypot(b.x - a.x, b.y - a.y) > 1.5 || !this.isVisibleTile(b.x, b.y)) continue;
+          g.lineStyle(PX * 0.07, RED_INK, 0.85 * (1 - (state.raceTime - b.t) / life));
+          g.lineBetween(a.x * PX, a.y * PX, (a.x + (b.x - a.x) * 0.55) * PX, (a.y + (b.y - a.y) * 0.55) * PX);
+        }
+      } else {
+        for (const print of me.footprints) {
+          if (!this.isVisibleTile(print.x, print.y)) continue;
+          g.fillStyle(mine, 0.45 * (1 - (state.raceTime - print.t) / life)).fillRect(Math.round(print.x * PX) - 2, Math.round(print.y * PX) - 2, 4, 4);
+        }
       }
       for (const print of this.driver.rivalPrints()) {
         const fade = 1 - (state.raceTime - print.t) / life;
-        if (fade > 0) g.fillStyle(print.color, 0.55 * fade).fillCircle(print.x * PX, print.y * PX, 3.5);
+        if (fade <= 0) continue;
+        if (this.look === 'map') g.fillStyle(print.color, 0.6 * fade).fillCircle(print.x * PX, print.y * PX, 3);
+        else g.fillStyle(print.color, 0.55 * fade).fillRect(Math.round(print.x * PX) - 2, Math.round(print.y * PX) - 2, 4, 4);
       }
     }
 
     this.drawTreasures(g);
+    this.drawDoors(g);
     this.drawTraps(g, top);
     this.drawObstacles(g);
     this.drawEnemies(g, top);
@@ -913,20 +1004,18 @@ export class RaceScene extends Phaser.Scene {
       const rx = rival.x * PX;
       const ry = rival.y * PX;
       if (rival.safe && this.flickerOff()) continue;
-      g.fillStyle(rival.color, 1).fillCircle(rx, ry, r);
-      g.fillStyle(0xffffff, 1).fillPoints(
-        [0, 0.9, -0.9].map((a, i) => {
-          const d = i === 0 ? r * 1.55 : r * 0.75;
-          return { x: rx + Math.cos(rival.facing + a) * d, y: ry + Math.sin(rival.facing + a) * d };
-        }),
-        true,
-      );
-      g.lineStyle(2, 0x10131a, 1).strokeCircle(rx, ry, r);
+      this.drawRunner(g, rival.id, rx, ry, rival.facing, rival.color, 1, 1, used);
       this.drawEffects(top, rx, ry, r, rival.fx.map((kind) => ({ kind, time: 1, total: 1 })));
       let label = this.labels.get(rival.id);
       if (!label) {
         label = this.add
-          .text(0, 0, rival.name, { fontFamily: 'system-ui, sans-serif', fontSize: '13px', color: '#e8ecf3', stroke: '#0b0d12', strokeThickness: 4 })
+          .text(0, 0, rival.name, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '13px',
+            color: this.look === 'map' ? '#33241a' : '#e8ecf3',
+            stroke: this.look === 'map' ? '#e9ddc1' : '#0b0d12',
+            strokeThickness: 4,
+          })
           .setOrigin(0.5, 1)
           .setDepth(25);
         this.labels.set(rival.id, label);
@@ -941,25 +1030,20 @@ export class RaceScene extends Phaser.Scene {
     {
       const sample = this.driver.ghost();
       if (sample && !this.peeking() && this.isVisibleTile(sample.x, sample.y)) {
-        const gx = sample.x * PX;
-        const gy = sample.y * PX;
-        g.fillStyle(COLOR.ghost, 0.22).fillCircle(gx, gy, PX * 0.3);
-        g.lineStyle(2, COLOR.ghost, 0.75).strokeCircle(gx, gy, PX * 0.3);
-        g.lineBetween(gx, gy, gx + Math.cos(sample.facing) * PX * 0.42, gy + Math.sin(sample.facing) * PX * 0.42);
+        // A pale, see-through runner.
+        this.drawRunner(g, 'ghost', sample.x * PX, sample.y * PX, sample.facing, COLOR.ghost, 1, 0.45, used);
       }
     }
 
     // The runner: a disc with a nose showing the facing direction.
     const x = px * PX;
     const y = py * PX;
-    const nose = (angle: number, dist: number) => ({ x: x + Math.cos(me.facing + angle) * dist, y: y + Math.sin(me.facing + angle) * dist });
     const scale = state.phase === 'preview' ? 2.4 : 1 + 1.4 * this.mapBlend;
     // Flickers during the safe time after a respawn.
     const alpha = me.safeTime > 0 && this.flickerOff() ? 0.2 : 1;
     // A pulsing ring makes the runner easy to find on the whole map.
     if (state.phase === 'preview' || this.mapBlend > 0.5) g.lineStyle(3, mine, 0.9).strokeCircle(x, y, r * 4 + Math.sin(this.time.now / 180) * 4);
-    g.fillStyle(mine, alpha).fillCircle(x, y, r * scale);
-    g.fillStyle(0xffffff, alpha).fillPoints([nose(0, r * 1.55 * scale), nose(0.9, r * 0.75 * scale), nose(-0.9, r * 0.75 * scale)], true);
+    this.drawRunner(g, 'me', x, y, me.facing, mine, scale, alpha, used);
     // A shove: a short white swipe across the cone in front.
     const swipe = (this.time.now - this.shoveAt) / (state.config.combat.activeSeconds * 1000);
     if (swipe >= 0 && swipe < 1) {
@@ -969,7 +1053,6 @@ export class RaceScene extends Phaser.Scene {
       g.arc(x, y, reach * (0.7 + 0.3 * swipe), me.facing - state.config.combat.arc, me.facing + state.config.combat.arc);
       g.strokePath();
     }
-    g.lineStyle(2, 0x1a1205, alpha).strokeCircle(x, y, r * scale);
 
     // Stamina ring round the runner whenever it is not full.
     const share = me.stamina / state.config.sprint.staminaMax;
@@ -980,6 +1063,7 @@ export class RaceScene extends Phaser.Scene {
     }
 
     if (racing) this.drawEffects(top, x, y, r, me.effects);
+    for (const [id, sprite] of this.sprites) if (!used.has(id)) sprite.setVisible(false);
     this.drawYou(top, x, y, r * scale);
 
     // Waypoint flags (the player's own notes, so they show through the fog).
@@ -1131,6 +1215,45 @@ export class RaceScene extends Phaser.Scene {
       g.fillStyle(0xffd23f, 0.25).fillCircle(x, y, r * 1.6);
       g.fillStyle(0xffc21a, 1).fillEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
       g.lineStyle(2, 0x8a5a00, 1).strokeEllipse(x, y, r * 2 * (0.35 + 0.65 * spin), r * 2);
+    });
+  }
+
+  /**
+   * Doors and keys, in their pair's colour. A door you have no key for is a
+   * solid slab with a keyhole; once you hold its key only its frame shows. A
+   * key you hold is no longer drawn (others still have theirs to pick up).
+   */
+  private drawDoors(g: Phaser.GameObjects.Graphics): void {
+    const doors = this.data_.map.doors;
+    if (!doors?.length) return;
+    const me = this.me();
+    const whole = !this.racingView() || this.peeking();
+    const k = whole ? 1.6 : 1;
+    const bob = Math.sin(this.time.now / 400) * 2;
+    doors.forEach((door, i) => {
+      const { color } = DOOR_STYLE[i % DOOR_STYLE.length]!;
+      const x = door.x * PX;
+      const y = door.y * PX;
+      const w = door.w * PX;
+      const h = door.h * PX;
+      if (me.keys[i]) {
+        g.lineStyle(2, color, 0.6).strokeRect(x + 1, y + 1, w - 2, h - 2);
+      } else {
+        g.fillStyle(color, 0.9).fillRect(x, y, w, h);
+        g.lineStyle(2, 0x10131a, 0.8).strokeRect(x + 1, y + 1, w - 2, h - 2);
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        g.fillStyle(0x10131a, 1).fillCircle(cx, cy - 3, 4).fillTriangle(cx - 3, cy + 7, cx + 3, cy + 7, cx, cy - 2);
+      }
+      if (me.keys[i]) return;
+      // The key: a ring, a shaft and two teeth.
+      const kx = door.key.x * PX;
+      const ky = door.key.y * PX + (whole ? 0 : bob);
+      g.fillStyle(color, 0.22).fillCircle(kx, ky, PX * 0.5 * k);
+      g.lineStyle(4 * k, color, 1).strokeCircle(kx - 7 * k, ky, 5 * k);
+      g.lineBetween(kx - 2 * k, ky, kx + 11 * k, ky);
+      g.lineBetween(kx + 8 * k, ky, kx + 8 * k, ky + 5 * k);
+      g.lineBetween(kx + 11 * k, ky, kx + 11 * k, ky + 6 * k);
     });
   }
 
@@ -1321,6 +1444,7 @@ export class RaceScene extends Phaser.Scene {
       raceTime: me.finishTime ?? state.raceTime,
       timeLeft: state.deadline - state.raceTime,
       stamina: me.stamina / state.config.sprint.staminaMax,
+      keys: (this.data_.map.doors ?? []).flatMap((_, i) => (me.keys[i] ? [DOOR_STYLE[i % DOOR_STYLE.length]!.color] : [])),
       shoveReady: state.phase === 'racing' && state.raceTime >= state.config.combat.startGraceSeconds && !me.finished && me.shoveCooldown <= 0 && me.stamina >= state.config.combat.staminaCost,
       exhausted: me.exhausted,
       sprinting: me.sprinting,

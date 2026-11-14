@@ -1,6 +1,6 @@
 import type { GameConfig } from '../config';
 import { distanceField } from '../map/distance';
-import { type EnemySpawn, type GameMap, type Point, isSolid } from '../map/types';
+import { type EnemySpawn, type GameMap, type Point, eitherBlocks, isSolid, lockedDoors } from '../map/types';
 import { applyEffect } from './effects';
 import { resolveWalls } from './movement';
 import { closedGateCheck, knock, obstacleTime } from './obstacles';
@@ -151,7 +151,8 @@ function homeField(map: GameMap, index: number, home: Point): Int32Array {
   if (!fields) homeFields.set(map, (fields = new Map()));
   let field = fields.get(index);
   if (!field) {
-    field = distanceField(map, { x: Math.floor(home.x) - 1, y: Math.floor(home.y) - 1, w: 2, h: 2 });
+    // Doors are locked to enemies.
+    field = distanceField(map, { x: Math.floor(home.x) - 1, y: Math.floor(home.y) - 1, w: 2, h: 2 }, lockedDoors(map, null));
     fields.set(index, field);
   }
   return field;
@@ -165,7 +166,7 @@ function moveChaser(state: RaceState, c: ChaserState, tx: number, ty: number, sp
   if (d < 1e-3) return;
   const step = Math.min(d, speed * dt);
   const body = { x: c.x + (dx / d) * step, y: c.y + (dy / d) * step, vx: (dx / d) * speed, vy: (dy / d) * speed };
-  resolveWalls(state.map, body, state.config.enemies.chaser.radius, c.x, c.y, closedGateCheck(state.map, state.config, obstacleTime(state)));
+  resolveWalls(state.map, body, state.config.enemies.chaser.radius, c.x, c.y, eitherBlocks(closedGateCheck(state.map, state.config, obstacleTime(state)), lockedDoors(state.map, null)));
   c.x = body.x;
   c.y = body.y;
   c.facing = Math.atan2(dy, dx);

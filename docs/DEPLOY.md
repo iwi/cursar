@@ -18,6 +18,7 @@ The game server serves the page and the game connection from one port, so hostin
 | `PORT` | `3000` | Port to listen on. Most platforms set it for you. |
 | `TRUST_PROXY` | off | Set to `1` behind a reverse proxy (any hosting platform, Caddy, nginx). Already on in the `Dockerfile`. |
 | `MAX_ROOMS` | `50` | Most rooms open at once. Further "Create a room" attempts are told the server is busy. |
+| `HOST_PASSWORD` | none | When set, creating a room asks for this password (the browser remembers it once it worked). Joining a room with its code never needs it. Without it, anyone with the address can create rooms. On Railway: the service → Variables → New variable; saving it redeploys. |
 
 `GET /health` answers `{"ok":true,"rooms":N}`, for the platform's health check.
 

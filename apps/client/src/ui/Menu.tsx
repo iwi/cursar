@@ -5,12 +5,14 @@ import { bestRun, loadGhosts } from '../recordings';
 import { loadStats } from '../stats';
 import { type Settings, deleteMap, formatTime, loadMaps, randomSeed, saveMap } from '../storage';
 import { Ghosts } from './Ghosts';
+import { DOOR_CHOICES, doorLabel } from './Multiplayer';
 
 interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   onStart: () => void;
-  onMultiplayer: () => void;
+  /** Back to the entry screen. */
+  onBack: () => void;
   /** Opens the map editor on a saved map, or on a new blank one (null). */
   onEditor: (map: GameMap | null) => void;
   onStats: () => void;
@@ -23,11 +25,11 @@ const SIZE_NOTES: Record<MapSize, string> = {
   large: 'Around 4–5 minutes',
 };
 
-export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onStats }: Props) {
+export function Menu({ settings, onChange, onStart, onBack, onEditor, onStats }: Props) {
   const seed = settings.seed.trim() || 'cursar';
   const [myMaps, setMyMaps] = useState(() => loadMaps());
   const custom = myMaps.find((m) => m.id === settings.mapId) ?? null;
-  const generated = useMemo(() => generateMap({ seed, size: settings.size }), [seed, settings.size]);
+  const generated = useMemo(() => generateMap({ seed, size: settings.size, doors: settings.doors }), [seed, settings.size, settings.doors]);
   const map = custom ?? generated;
   const record = useMemo(() => loadStats().maps[map.id] ?? null, [map.id]);
   // Runs from before statistics were kept still have their ghost.
@@ -39,7 +41,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onS
   /** Shows a map that came with a ghost file: a generated one by its seed, a hand-made one added to My maps. */
   const openMap = (opened: GameMap) => {
     if (opened.generator) {
-      onChange({ mapId: '', seed: opened.generator.seed, size: opened.generator.size as MapSize });
+      onChange({ mapId: '', seed: opened.generator.seed, size: opened.generator.size as MapSize, doors: opened.generator.doors ?? 0 });
       return;
     }
     if (!myMaps.some((m) => m.id === opened.id)) setMyMaps(saveMap(opened));
@@ -56,7 +58,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onS
         }}
       >
         <header>
-          <h1>Cursar</h1>
+          <h1>Solo race</h1>
           <p>Study the map. Then run it from memory: touch every checkpoint, in any order, and reach the finish.</p>
         </header>
 
@@ -97,6 +99,13 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onS
         </fieldset>
 
         <label className="field">
+          <span>Doors and keys <small>(each door blocks the way to a checkpoint or the finish until you fetch its key)</small></span>
+          <select value={settings.doors} onChange={(event) => onChange({ doors: Number(event.target.value) })}>
+            {DOOR_CHOICES.map((n) => <option key={n} value={n}>{doorLabel(n)}</option>)}
+          </select>
+        </label>
+
+        <label className="field">
           <span>Map seed</span>
           <div className="seed-row">
             <input value={settings.seed} onChange={(event) => onChange({ seed: event.target.value })} spellCheck={false} maxLength={40} />
@@ -117,7 +126,7 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onS
         <dl className="facts">
           <div>
             <dt>Map</dt>
-            <dd>{map.checkpoints.length} checkpoints</dd>
+            <dd>{map.checkpoints.length} checkpoints{map.doors?.length ? `, ${doorLabel(map.doors.length)}` : ''}</dd>
           </div>
           <div>
             <dt>Preview</dt>
@@ -163,8 +172,10 @@ export function Menu({ settings, onChange, onStart, onMultiplayer, onEditor, onS
         </label>
 
         <button type="submit" className="primary">Start solo race</button>
-        <button type="button" className="secondary" onClick={onMultiplayer}>Play with friends</button>
-        <button type="button" className="secondary" onClick={onStats}>Statistics</button>
+        <div className="actions">
+          <button type="button" onClick={onBack}>Back</button>
+          <button type="button" onClick={onStats}>Statistics</button>
+        </div>
 
         <table className="keys">
           <tbody>

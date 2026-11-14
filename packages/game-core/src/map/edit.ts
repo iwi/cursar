@@ -1,9 +1,11 @@
 import {
+  type Door,
   ENEMY_KINDS,
   type EnemySpawn,
   type GameMap,
   LANDMARK_KINDS,
   type Landmark,
+  MAX_DOORS,
   type Obstacle,
   type Point,
   type Rect,
@@ -229,6 +231,15 @@ export function decodeMap(raw: unknown): DecodeResult {
   const treasures = list(m.treasures, MAX.treasures)?.map(point);
   if (!treasures || treasures.some((p) => !p)) return fail('The treasures are not valid.');
 
+  const doors: Door[] = [];
+  for (const v of list(m.doors, MAX_DOORS) ?? [null]) {
+    const d = (v ?? {}) as Record<string, unknown>;
+    const r = rect(d, 3);
+    const key = point(d.key);
+    if (!r || !key || !isInt(r.x) || !isInt(r.y) || !isInt(r.w) || !isInt(r.h)) return fail('The doors are not valid.');
+    doors.push({ ...r, key });
+  }
+
   const name = typeof m.name === 'string' ? m.name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, MAX.name) : '';
   const map: GameMap = {
     schema: 1,
@@ -247,6 +258,8 @@ export function decodeMap(raw: unknown): DecodeResult {
     enemies,
     treasures: treasures as Point[],
   };
+  // Only maps with doors carry the field, so the ids of maps without them stay as they were.
+  if (doors.length > 0) map.doors = doors;
   const check = validateMap(map);
   if (!check.ok) return fail(check.errors[0] ?? 'The map cannot be played.');
   map.id = contentId(map);

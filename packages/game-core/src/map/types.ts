@@ -82,6 +82,23 @@ export type EnemySpawn =
   /** Fixed in place; turns to face a runner in sight and fires bolts. */
   | { kind: 'turret'; x: number; y: number };
 
+/**
+ * A locked door in an opening between two cells, and the key that opens it.
+ * Every runner picks up their own copy of the key; the door then opens for
+ * them only.
+ */
+export interface Door {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Where its key lies (tile units, centre). */
+  key: Point;
+}
+
+/** Most door-and-key pairs a map can have (each has its own colour). */
+export const MAX_DOORS = 4;
+
 /** Versioned map format shared by the generator, the game and (later) the editor. */
 export interface GameMap {
   schema: 1;
@@ -108,8 +125,10 @@ export interface GameMap {
   enemies?: EnemySpawn[];
   /** Treasures, a point each; every runner collects their own. Optional, like obstacles. */
   treasures?: Point[];
-  /** Present when the map came from the generator. */
-  generator?: { seed: string; size: string };
+  /** Locked doors and their keys. Optional, like obstacles. */
+  doors?: Door[];
+  /** Present when the map came from the generator. `doors` is the number of door-and-key pairs asked for. */
+  generator?: { seed: string; size: string; doors?: number };
 }
 
 export function tileAt(map: GameMap, tx: number, ty: number): number {
@@ -119,6 +138,40 @@ export function tileAt(map: GameMap, tx: number, ty: number): number {
 
 export function isSolid(map: GameMap, tx: number, ty: number): boolean {
   return TERRAIN[tileAt(map, tx, ty)]!.solid;
+}
+
+/** The index of the door covering a tile, or -1. */
+export function doorAt(map: GameMap, tx: number, ty: number): number {
+  const doors = map.doors;
+  if (!doors) return -1;
+  for (let i = 0; i < doors.length; i++) {
+    const d = doors[i]!;
+    if (tx >= d.x && tx < d.x + d.w && ty >= d.y && ty < d.y + d.h) return i;
+  }
+  return -1;
+}
+
+/**
+ * A check for doors that are locked to someone holding `keys` (one flag per
+ * door; null or empty means no keys), or null when nothing is locked.
+ */
+export function lockedDoors(map: GameMap, keys: readonly boolean[] | null): ((tx: number, ty: number) => boolean) | null {
+  if (!map.doors?.length) return null;
+  if (keys && map.doors.every((_, i) => keys[i])) return null;
+  return (tx, ty) => {
+    const i = doorAt(map, tx, ty);
+    return i >= 0 && !keys?.[i];
+  };
+}
+
+/** Both checks, or whichever exists. */
+export function eitherBlocks(
+  a: ((tx: number, ty: number) => boolean) | null,
+  b: ((tx: number, ty: number) => boolean) | null,
+): ((tx: number, ty: number) => boolean) | null {
+  if (!a) return b;
+  if (!b) return a;
+  return (tx, ty) => a(tx, ty) || b(tx, ty);
 }
 
 export function inRect(r: Rect, x: number, y: number): boolean {

@@ -1,6 +1,6 @@
 import { Rng } from '../rng';
 import { startPositionsAt } from './edit';
-import { ENEMY_KINDS, type EnemySpawn, type GameMap, LANDMARK_KINDS, type Landmark, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
+import { type Door, ENEMY_KINDS, type EnemySpawn, type GameMap, LANDMARK_KINDS, type Landmark, MAX_DOORS, type Obstacle, type Point, TRAP_KINDS, type Trap, Tile } from './types';
 import { distanceField } from './distance';
 import { validateMap } from './validate';
 
@@ -39,6 +39,8 @@ export interface GenerateOptions {
   chasers?: number;
   /** Number of treasures (defaults to the size's own count). */
   treasures?: number;
+  /** Locked doors, each with its key (default none). Asked-for doors that do not fit are left out. */
+  doors?: number;
 }
 
 const PITCH = 3;
@@ -146,6 +148,7 @@ export function generateMap(options: GenerateOptions): GameMap {
 
   // 4. Landmark plazas: open rooms, each with a different feature in the middle.
   const landmarks: Landmark[] = [];
+  const plaza = new Uint8Array(cols * rows);
   const kinds = rng.shuffle([...LANDMARK_KINDS]);
   const roomCount = Math.max(2, Math.round((cols * rows) / 40));
   for (let i = 0, attempts = 0; i < roomCount && attempts < 200; attempts++) {
@@ -162,6 +165,7 @@ export function generateMap(options: GenerateOptions): GameMap {
     if (clash) continue;
     fillCells(c, r, c + w - 1, r + h - 1, Tile.Floor);
     reserve(c, r, c + w - 1, r + h - 1);
+    for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) plaza[rr * cols + cc] = 1;
     landmarks.push({
       x: c * PITCH + 1 + (w * PITCH - 1) / 2,
       y: r * PITCH + 1 + (h * PITCH - 1) / 2,
@@ -431,6 +435,115 @@ export function generateMap(options: GenerateOptions): GameMap {
   }
   base.treasures = treasures;
 
+  // 11. Doors and keys, only when asked for. They use their own random stream,
+  //     so a map without doors is exactly the map it always was.
+  const doorCount = Math.max(0, Math.min(MAX_DOORS, Math.floor(options.doors ?? 0)));
+  if (doorCount > 0) {
+    base.doors = placeDoors(doorCount);
+    base.id += `-d${doorCount}`;
+    base.generator = { seed, size, doors: doorCount };
+    const placed = base.doors.length;
+    base.name += placed === 1 ? ' with a door' : ` with ${placed} doors`;
+  }
+
+  /**
+   * Each door goes in an opening that cuts a checkpoint or the finish off from
+   * the start, and its key lies somewhere reachable with every door shut, far
+   * from the start (a dead end if possible), so it must be fetched. Doors keep
+   * off plazas, the start, moving obstacles and patrollers' beats.
+   */
+  function placeDoors(count: number): Door[] {
+    const drng = new Rng(`${size}:${seed}:doors`);
+    const cell = (c: number, r: number) => r * cols + c;
+    const startCells = new Set<number>();
+    for (let r = startR; r < startR + 2; r++) for (let c = startC; c < startC + 2; c++) startCells.add(cell(c, r));
+    const cellOf = (x: number, y: number) => cell(Math.floor((x - 1) / PITCH), Math.floor((y - 1) / PITCH));
+    // Cells something moves through, or that hold something.
+    const moving = new Set<number>();
+    for (const o of obstacles) {
+      if (o.kind !== 'boulder') continue;
+      const steps = Math.round(Math.hypot(o.bx - o.ax, o.by - o.ay) / PITCH);
+      for (let n = 0; n <= steps; n++) moving.add(cellOf(o.ax + ((o.bx - o.ax) * n) / Math.max(1, steps), o.ay + ((o.by - o.ay) * n) / Math.max(1, steps)));
+    }
+    for (const e of enemies) if (e.kind === 'patroller') for (const pt of e.path) moving.add(cellOf(pt.x, pt.y));
+    const taken = new Set<number>([...moving]);
+    for (const z of [base.finish, ...base.checkpoints]) taken.add(cellOf(z.x, z.y));
+    for (const t of traps) taken.add(cellOf(t.x, t.y));
+    for (const e of enemies) if (e.kind !== 'patroller') taken.add(cellOf(e.x, e.y));
+    for (const t of treasures) taken.add(cellOf(t.x, t.y));
+    const gates = obstacles.filter((o) => o.kind === 'gate');
+    const targets = [base.finish, ...base.checkpoints].map((z) => cellOf(z.x, z.y));
+
+    const edge = (c: number, r: number, d: { dx: number; dy: number }) => `${Math.min(cell(c, r), cell(c + d.dx, r + d.dy))}:${Math.max(cell(c, r), cell(c + d.dx, r + d.dy))}`;
+    const shut = new Set<string>();
+    /** Walking distance in cells from the start plaza with the shut openings closed (-1: cut off). */
+    const reach = (extra: string | null) => {
+      const dist = new Int32Array(cols * rows).fill(-1);
+      const queue = [...startCells];
+      for (const i of queue) dist[i] = 0;
+      for (let head = 0; head < queue.length; head++) {
+        const i = queue[head]!;
+        const c = i % cols;
+        const r = (i - c) / cols;
+        for (const d of DIRS) {
+          if (!inGrid(c + d.dx, r + d.dy) || !isOpenBetween(c, r, d.dx, d.dy)) continue;
+          const e = edge(c, r, d);
+          if (shut.has(e) || e === extra) continue;
+          const j = cell(c + d.dx, r + d.dy);
+          if (dist[j] !== -1) continue;
+          dist[j] = dist[i]! + 1;
+          queue.push(j);
+        }
+      }
+      return dist;
+    };
+
+    const candidates: { c: number; r: number; d: { dx: number; dy: number } }[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        for (const d of [DIRS[0]!, DIRS[2]!]) {
+          const a = cell(c, r);
+          const b = cell(c + d.dx, r + d.dy);
+          if (!inGrid(c + d.dx, r + d.dy) || !isOpenBetween(c, r, d.dx, d.dy)) continue;
+          if (plaza[a] || plaza[b] || startCells.has(a) || startCells.has(b) || moving.has(a) || moving.has(b)) continue;
+          candidates.push({ c, r, d });
+        }
+      }
+    }
+
+    const doors: Door[] = [];
+    const keyCells: number[] = [];
+    const doorCells: number[] = [];
+    const near = (a: number, b: number) => Math.abs((a % cols) - (b % cols)) <= 1 && Math.abs(Math.floor(a / cols) - Math.floor(b / cols)) <= 1;
+    for (const { c, r, d } of drng.shuffle(candidates)) {
+      if (doors.length >= count) break;
+      const a = cell(c, r);
+      const b = cell(c + d.dx, r + d.dy);
+      if (doorCells.some((x) => near(x, a) || near(x, b))) continue;
+      const rect = d.dx !== 0 ? { x: (c + 1) * PITCH, y: r * PITCH + 1, w: 1, h: 2 } : { x: c * PITCH + 1, y: (r + 1) * PITCH, w: 2, h: 1 };
+      if (gates.some((g) => g.x === rect.x && g.y === rect.y)) continue;
+      const e = edge(c, r, d);
+      const dist = reach(e);
+      // It must lock something away, and every key placed so far must still be reachable.
+      if (!targets.some((t) => dist[t]! < 0) || keyCells.some((k) => dist[k]! < 0)) continue;
+      const spots: number[] = [];
+      for (let i = 0; i < cols * rows; i++) {
+        if (dist[i]! <= 0 || taken.has(i) || plaza[i] || startCells.has(i) || keyCells.includes(i)) continue;
+        spots.push(i);
+      }
+      if (spots.length === 0) continue;
+      const ends = spots.filter((i) => DIRS.filter((dd) => inGrid((i % cols) + dd.dx, Math.floor(i / cols) + dd.dy) && isOpenBetween(i % cols, Math.floor(i / cols), dd.dx, dd.dy)).length === 1);
+      const pool = (ends.length > 0 ? ends : spots).sort((x, y) => dist[y]! - dist[x]!);
+      const key = drng.pick(pool.slice(0, Math.max(1, Math.ceil(pool.length / 3))));
+      shut.add(e);
+      keyCells.push(key);
+      taken.add(key);
+      doorCells.push(a, b);
+      doors.push({ ...rect, key: centre(key % cols, Math.floor(key / cols)) });
+    }
+    return doors;
+  }
+
   const check = validateMap(base);
   if (!check.ok) throw new Error(`Generated map failed validation: ${check.errors.join(' ')}`);
   return base;
@@ -472,6 +585,7 @@ export function flipMap(map: GameMap, flipX: boolean, flipY: boolean): GameMap {
     }),
     traps: map.traps?.map((t) => ({ ...t, x: flipX ? width - 1 - t.x : t.x, y: flipY ? height - 1 - t.y : t.y })),
     treasures: map.treasures?.map((t) => ({ x: px(t.x), y: py(t.y) })),
+    doors: map.doors?.map((d) => ({ ...rect(d), key: { x: px(d.key.x), y: py(d.key.y) } })),
     enemies: map.enemies?.map((e): EnemySpawn =>
       e.kind === 'patroller' ? { ...e, path: e.path.map((pt) => ({ x: px(pt.x), y: py(pt.y) })) } : { ...e, x: px(e.x), y: py(e.y) },
     ),

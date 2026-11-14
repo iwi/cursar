@@ -1,14 +1,14 @@
 import { DEFAULT_CONFIG, ENGINE_VERSION } from '../config';
 import { type EncodedMap, decodeMap, encodeMap } from '../map/edit';
 import { MAP_SIZES, type MapSize, generateMap } from '../map/generate';
-import type { GameMap } from '../map/types';
+import { type GameMap, MAX_DOORS } from '../map/types';
 import type { GhostRecording } from './ghost';
 
 /**
  * Where a ghost's map comes from: a generated map is named by its seed and
  * size (the generator rebuilds it); any other map travels whole.
  */
-export type MapRef = { seed: string; size: MapSize } | { map: EncodedMap };
+export type MapRef = { seed: string; size: MapSize; doors?: number } | { map: EncodedMap };
 
 /** A ghost with its map, as written to a `.cursar-ghost.json` file. */
 export interface GhostFile {
@@ -31,7 +31,8 @@ export function mapRef(map: GameMap): MapRef {
   const gen = map.generator;
   if (gen && gen.size in MAP_SIZES) {
     const size = gen.size as MapSize;
-    if (generateMap({ seed: gen.seed, size }).id === map.id) return { seed: gen.seed, size };
+    const doors = gen.doors ?? 0;
+    if (generateMap({ seed: gen.seed, size, doors }).id === map.id) return doors > 0 ? { seed: gen.seed, size, doors } : { seed: gen.seed, size };
   }
   return { map: encodeMap(map) };
 }
@@ -46,11 +47,14 @@ export function resolveMapRef(raw: unknown): MapRefResult {
     const decoded = decodeMap(ref.map);
     return decoded.ok ? decoded : { ok: false, error: decoded.error };
   }
-  const { seed, size } = ref;
+  const { seed, size, doors } = ref;
   if (typeof seed !== 'string' || seed.length === 0 || seed.length > LIMITS.seed || typeof size !== 'string' || !(size in MAP_SIZES)) {
     return { ok: false, error: 'The ghost’s map is not valid.' };
   }
-  return { ok: true, map: generateMap({ seed, size: size as MapSize }) };
+  if (doors !== undefined && (!Number.isInteger(doors) || (doors as number) < 0 || (doors as number) > MAX_DOORS)) {
+    return { ok: false, error: 'The ghost’s map is not valid.' };
+  }
+  return { ok: true, map: generateMap({ seed, size: size as MapSize, doors: (doors as number | undefined) ?? 0 }) };
 }
 
 /**

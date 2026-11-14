@@ -75,7 +75,8 @@ const http = createServer((req, res) => {
   createReadStream(file).pipe(res);
 });
 
-const rooms = new Rooms({ addresses: lanAddresses(), maxRooms: MAX_ROOMS });
+// Set HOST_PASSWORD (in Railway's variables, say) so only people who know it can create rooms.
+const rooms = new Rooms({ addresses: lanAddresses(), maxRooms: MAX_ROOMS, hostPassword: process.env.HOST_PASSWORD || undefined });
 const sockets = new WebSocketServer({ server: http, path: '/ws', maxPayload: MAX_MAP_MESSAGE * 2 });
 
 function visitorAddress(req: IncomingMessage): string {

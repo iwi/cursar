@@ -1,8 +1,11 @@
+import { type Look, isLook } from './game/looks';
 import { type EncodedMap, type GameMap, type MapSize, decodeMap, encodeMap } from '@cursar/game-core';
 
 export interface Settings {
   size: MapSize;
   seed: string;
+  /** Locked doors, each with its key, in generated solo maps (0 to 3). */
+  doors: number;
   /** Show an arrow pointing straight at the nearest checkpoint, then the finish (direction only). */
   finishArrow: boolean;
   /** The hand-made map to race in solo play (its id), or '' for generated maps. */
@@ -16,9 +19,11 @@ export interface Settings {
   /** Name and colour used in network play (the colour is also your runner's in single player). */
   name: string;
   color: number;
+  /** How the race is drawn: pixel art or a hand-drawn map. */
+  look: Look;
 }
 
-const DEFAULTS: Settings = { size: 'small', seed: '', finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000 };
+const DEFAULTS: Settings = { size: 'small', seed: '', doors: 0, finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000, look: 'pixel' };
 const SETTINGS_KEY = 'cursar.settings';
 
 // Storage can be unavailable (private windows, blocked site data): the game must still run.
@@ -50,7 +55,9 @@ export function remove(key: string): void {
 }
 
 export function loadSettings(): Settings {
-  return { ...DEFAULTS, ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
+  const loaded = { ...DEFAULTS, ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
+  if (!isLook(loaded.look)) loaded.look = DEFAULTS.look;
+  return loaded;
 }
 
 export function saveSettings(settings: Settings): void {

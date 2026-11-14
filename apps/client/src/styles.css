@@ -321,3 +321,21 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .results .run-report .facts { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
 .results .run-report .facts div { padding: 6px 8px; }
 .results .run-report .facts dt { font-size: 12px; }
+.hearts .held-key { margin-left: 6px; vertical-align: middle; }
+.hint.left { text-align: left; margin: 0; }
+small.bad { color: var(--bad); }
+
+/* Entry screen */
+.modes { display: grid; gap: 10px; }
+.mode { display: grid; gap: 4px; text-align: left; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--panel-edge); background: #1a1f2b; color: var(--text); cursor: pointer; }
+.mode strong { font-size: 19px; color: var(--accent); }
+.mode span { color: var(--muted); font-size: 14px; }
+.mode:hover, .mode:focus-visible { border-color: var(--accent); background: #212737; }
+.look-switch { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.look-note { flex-basis: 100%; text-align: center; color: var(--muted); font-size: 13px; }
+.look-switch > span { color: var(--muted); font-size: 14px; margin-right: 4px; }
+.look-switch button { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--panel-edge); background: #1a1f2b; color: var(--text); cursor: pointer; }
+.look-switch button.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.look-switch button:hover:not(.on), .look-switch button:focus-visible { border-color: var(--accent); }
+button.link { background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; justify-self: center; padding: 4px; }
+button.link:hover { color: var(--text); }

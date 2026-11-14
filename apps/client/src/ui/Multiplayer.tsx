@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
 import { Connection, type ConnectionStatus } from '../net/Connection';
-import { type Settings, loadMaps } from '../storage';
+import { type Settings, loadMaps, read, remove, write } from '../storage';
 import { NetRace } from './NetRace';
 import { hex } from './Race';
 
@@ -58,23 +58,87 @@ export function Multiplayer(props: Props) {
       window.removeEventListener('keydown', unlock);
     };
   }, []);
+  // The host password, when the server asks for one to create rooms; remembered once it worked.
+  const [password, setPassword] = useState(() => read<string>(PASSWORD_KEY) ?? '');
+  const [passwordAsk, setPasswordAsk] = useState('');
   const exit = () => {
     setRoomInAddress('');
     props.onExit();
   };
-  if (target === undefined) return <ChooseRoom onCreate={() => setTarget(null)} onJoin={setTarget} onExit={exit} />;
-  return <Online key={target ?? 'new'} {...props} target={target} onExit={exit} onAnother={() => { setRoomInAddress(''); setTarget(undefined); }} />;
+  if (target === undefined) {
+    return (
+      <ChooseRoom
+        passwordAsk={passwordAsk}
+        password={password}
+        onCreate={(typed) => {
+          setPassword(typed);
+          setPasswordAsk('');
+          setTarget(null);
+        }}
+        onJoin={setTarget}
+        onExit={exit}
+      />
+    );
+  }
+  return (
+    <Online
+      key={target ?? 'new'}
+      {...props}
+      target={target}
+      password={target === null ? password : ''}
+      onExit={exit}
+      onAnother={() => { setRoomInAddress(''); setTarget(undefined); }}
+      onPassword={(message) => {
+        remove(PASSWORD_KEY);
+        setPasswordAsk(message);
+        setTarget(undefined);
+      }}
+    />
+  );
 }
 
-function ChooseRoom({ onCreate, onJoin, onExit }: { onCreate: () => void; onJoin: (code: string) => void; onExit: () => void }) {
+const PASSWORD_KEY = 'cursar.hostPassword';
+
+export const DOOR_CHOICES = [0, 1, 2, 3];
+
+export function doorLabel(n: number): string {
+  return n === 0 ? 'None' : n === 1 ? '1 door' : `${n} doors`;
+}
+
+function ChooseRoom({ passwordAsk, password, onCreate, onJoin, onExit }: {
+  /** Why the password is needed (missing or wrong), or '' when it is not being asked for. */
+  passwordAsk: string;
+  password: string;
+  onCreate: (password: string) => void;
+  onJoin: (code: string) => void;
+  onExit: () => void;
+}) {
   const [typed, setTyped] = useState('');
+  const [secret, setSecret] = useState(password);
   const code = cleanRoomCode(typed);
   return (
     <main className="menu">
       <div className="menu-card">
         <h1>Play with friends</h1>
         <p className="muted">One of you creates a room and shares its code or link. Everyone else joins with it. Up to {MAX_PLAYERS} players.</p>
-        <button type="button" className="primary" onClick={onCreate}>Create a room</button>
+        {passwordAsk ? (
+          <form
+            className="join-code"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (secret) onCreate(secret);
+            }}
+          >
+            <label className="field grow">
+              <span>Host password <small className="bad">{passwordAsk}</small></span>
+              <input type="password" value={secret} autoComplete="current-password" autoFocus onChange={(event) => setSecret(event.target.value)} />
+            </label>
+            <button type="submit" className="primary" disabled={!secret}>Create a room</button>
+          </form>
+        ) : (
+          <button type="button" className="primary" onClick={() => onCreate(password)}>Create a room</button>
+        )}
+        {passwordAsk && <p className="hint left">Only creating a room needs the password: friends join with the room code alone.</p>}
         <form
           className="join-code"
           onSubmit={(event) => {
@@ -104,11 +168,15 @@ function ChooseRoom({ onCreate, onJoin, onExit }: { onCreate: () => void; onJoin
 
 interface OnlineProps extends Props {
   target: string | null;
+  /** The host password to create a room with ('' if none). */
+  password: string;
   onAnother: () => void;
+  /** The server wants the host password (missing or wrong): ask for it. */
+  onPassword: (message: string) => void;
 }
 
-function Online({ settings, onChange, onExit, onAnother, target }: OnlineProps) {
-  const [connection] = useState(() => new Connection({ name: settings.name, color: settings.color }, target));
+function Online({ settings, onChange, onExit, onAnother, onPassword, target, password }: OnlineProps) {
+  const [connection] = useState(() => new Connection({ name: settings.name, color: settings.color }, target, password));
   const [status, setStatus] = useState<ConnectionStatus>(connection.status);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [race, setRace] = useState<RaceStart | null>(null);
@@ -118,7 +186,10 @@ function Online({ settings, onChange, onExit, onAnother, target }: OnlineProps) 
   useEffect(() => {
     const off = [
       connection.onStatus(setStatus),
-      connection.on('welcome', (message) => setRoomInAddress(message.room)),
+      connection.on('welcome', (message) => {
+        setRoomInAddress(message.room);
+        if (target === null && password) write(PASSWORD_KEY, password);
+      }),
       connection.on('room', (message) => {
         setRoom(message.room);
         if (message.room.stage === 'lobby') {
@@ -131,7 +202,7 @@ function Online({ settings, onChange, onExit, onAnother, target }: OnlineProps) 
         setRace(message);
       }),
       connection.on('results', setResults),
-      connection.on('error', (message) => setError(message.message)),
+      connection.on('error', (message) => (message.need === 'password' ? onPassword(message.message) : setError(message.message))),
     ];
     return () => {
       off.forEach((fn) => fn());
@@ -388,6 +459,12 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                 ))}
               </select>
             </label>
+            {!custom && <label className="field">
+              <span>Doors and keys</span>
+              <select value={room.settings.doors} disabled={!isHost || waiting} onChange={(event) => set({ doors: Number(event.target.value) })}>
+                {DOOR_CHOICES.map((n) => <option key={n} value={n}>{doorLabel(n)}</option>)}
+              </select>
+            </label>}
             {!custom && <label className="field grow">
               <span>Map seed <small>(blank for random maps)</small></span>
               <input

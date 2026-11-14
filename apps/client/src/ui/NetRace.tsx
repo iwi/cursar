@@ -26,7 +26,7 @@ export function NetRace({ start, results, room, connection, settings, onChange, 
   // Everyone builds the same map from the seed the server chose, unless the host chose a hand-made map.
   const map = useMemo<GameMap>(() => {
     const made = start.map ? decodeMap(start.map) : null;
-    return made?.ok ? made.map : generateMap({ seed: start.seed, size: start.size });
+    return made?.ok ? made.map : generateMap({ seed: start.seed, size: start.size, doors: start.doors });
   }, [start]);
   const isHost = room.hostId === connection.id;
   const hostName = room.players.find((p) => p.id === room.hostId)?.name ?? 'the host';

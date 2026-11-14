@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CONFIG, type GameEvent, GhostRecorder, MAP_SIZES, type MapSize, NO_INPUT, type PlayerInput, Rng, Tile,
-  cloneConfig, computeVisibility, createRace, flipMap, generateMap, isSolid, placeMarker, previewSeconds,
+  cloneConfig, computeVisibility, createRace, distanceField, flipMap, generateMap, isSolid, placeMarker, previewSeconds,
   planRoute, resumeRace, sampleGhost, skipPreview, step, validateMap, visionRange,
 } from '../src';
 import { makeBot, mapFromText } from './helpers';
@@ -77,10 +77,11 @@ describe('map generation', () => {
       const zones = [...map.checkpoints, map.finish];
       const start = map.startPositions[0]!;
       const plan = planRoute(map);
+      const fields = zones.map((z) => distanceField(map, z));
       map.checkpoints.forEach((zone, index) => {
-        expect(plan.fields[index]![Math.floor(start.y) * map.width + Math.floor(start.x)]).toBeGreaterThan(15);
+        expect(fields[index]![Math.floor(start.y) * map.width + Math.floor(start.x)]).toBeGreaterThan(15);
         zones.forEach((_other, j) => {
-          if (j !== index) expect(plan.fields[j]![zone.y * map.width + zone.x]).toBeGreaterThan(15);
+          if (j !== index) expect(fields[j]![zone.y * map.width + zone.x]).toBeGreaterThan(15);
         });
       });
       expect([...plan.order].sort()).toEqual(map.checkpoints.map((_, index) => index));

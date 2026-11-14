@@ -45,10 +45,11 @@ export class Connection {
   private closedByUs = false;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** `room` is the code to join, or null to create a new room. */
+  /** `room` is the code to join, or null to create a new room (with the host password, if the server wants one). */
   constructor(
     private profile: { name: string; color: number },
     room: string | null,
+    private password = '',
   ) {
     this.room = room ?? '';
     this.open();
@@ -61,7 +62,15 @@ export class Connection {
     socket.onopen = () => {
       // Once welcomed, reconnecting always goes back to the same room, never a new one.
       const room = this.room || undefined;
-      this.send({ t: 'hello', v: PROTOCOL_VERSION, name: this.profile.name, color: this.profile.color, room, token: room && storedToken(room) });
+      this.send({
+        t: 'hello',
+        v: PROTOCOL_VERSION,
+        name: this.profile.name,
+        color: this.profile.color,
+        room,
+        token: room && storedToken(room),
+        ...(room === undefined && this.password ? { password: this.password } : {}),
+      });
     };
     socket.onmessage = (event) => {
       let message: ServerMessage;

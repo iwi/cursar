@@ -5,7 +5,7 @@ import type { GameMap } from '../map/types';
 import type { EffectKind, GameEvent, PlayerState, RacePhase } from '../sim/types';
 
 /** Bumped whenever messages change shape, so mismatched client and server refuse each other. */
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
 
 /** The longest message a client may send (a hand-made map); every other message must be under 2000 characters. */
 export const MAX_MAP_MESSAGE = 60000;
@@ -58,6 +58,8 @@ export interface LobbySettings {
   seed: string;
   /** Number of races in the series. */
   races: number;
+  /** Locked doors (each with its key) in generated maps. */
+  doors: number;
 }
 
 export interface RoomPlayer {
@@ -128,7 +130,7 @@ export interface ResultRow {
 
 export type ClientMessage =
   /** First message on a connection. `room` is the code to join; without one, a new room is created. */
-  | { t: 'hello'; v: number; name: string; color: number; room?: string; token?: string }
+  | { t: 'hello'; v: number; name: string; color: number; room?: string; token?: string; password?: string }
   | { t: 'profile'; name: string; color: number }
   | { t: 'settings'; settings: Partial<LobbySettings> }
   /** Host, in the lobby: race this hand-made map (checked by the server), or null to go back to generated maps. */
@@ -156,7 +158,8 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { t: 'welcome'; v: number; id: string; token: string; room: string; addresses: string[] }
-  | { t: 'error'; message: string }
+  /** `need: 'password'`: creating a room needs the host password (missing or wrong). */
+  | { t: 'error'; message: string; need?: 'password' }
   | { t: 'room'; room: RoomInfo }
   | {
       t: 'race';
@@ -164,6 +167,8 @@ export type ServerMessage =
       id: number;
       seed: string;
       size: MapSize;
+      /** Locked doors asked for in the generated map. */
+      doors: number;
       config: GameConfig;
       raceNumber: number;
       racesTotal: number;
@@ -209,6 +214,9 @@ export function cleanName(raw: unknown): string {
   return raw.replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, MAX_NAME_LENGTH).trim();
 }
 
+/** Most doors that can be asked for in generated maps (the menus offer 0 to 3). */
+export const MAX_DOORS_CHOICE = 3;
+
 export function cleanSettings(raw: unknown): Partial<LobbySettings> {
   const out: Partial<LobbySettings> = {};
   if (typeof raw !== 'object' || raw === null) return out;
@@ -216,6 +224,7 @@ export function cleanSettings(raw: unknown): Partial<LobbySettings> {
   if (typeof r.size === 'string' && r.size in MAP_SIZES) out.size = r.size as MapSize;
   if (typeof r.seed === 'string') out.seed = r.seed.replace(/[^\w -]/g, '').slice(0, 40);
   if (isNumber(r.races)) out.races = Math.max(1, Math.min(9, Math.round(r.races)));
+  if (isNumber(r.doors)) out.doors = Math.max(0, Math.min(MAX_DOORS_CHOICE, Math.round(r.doors)));
   return out;
 }
 
@@ -250,6 +259,7 @@ export function parseClientMessage(text: string): ClientMessage | null {
         color: m.color,
         room: m.room === undefined ? undefined : cleanRoomCode(m.room),
         token: typeof m.token === 'string' ? m.token.slice(0, 64) : undefined,
+        password: typeof m.password === 'string' ? m.password.slice(0, 100) : undefined,
       };
     case 'profile':
       return isNumber(m.color) ? { t: 'profile', name: cleanName(m.name), color: m.color } : null;

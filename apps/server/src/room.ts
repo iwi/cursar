@@ -109,7 +109,7 @@ export class Room {
   private hostId = '';
   /** A host whose connection dropped: the role goes back to them if they return. */
   private returningHostId = '';
-  private settings: LobbySettings = { size: 'small', seed: '', races: 3 };
+  private settings: LobbySettings = { size: 'small', seed: '', races: 3, doors: 0 };
   private racesDone = 0;
   private seriesSeed = '';
   /** A hand-made map chosen by the host, raced instead of generated maps. */
@@ -400,7 +400,7 @@ export class Room {
     const racers = this.members.filter((m) => m.send || m.bot).slice(0, MAX_PLAYERS);
     if (racers.length === 0) return;
     const seed = `${this.seriesSeed}-${this.racesDone + 1}`;
-    const map = this.customMap ?? generateMap({ seed, size: this.settings.size });
+    const map = this.customMap ?? generateMap({ seed, size: this.settings.size, doors: this.settings.doors });
     // Start positions rotate from race to race so nobody keeps the same one.
     const state = createRace(
       map,
@@ -432,6 +432,7 @@ export class Room {
       id: this.raceId,
       seed: race.seed,
       size: this.settings.size,
+      doors: this.settings.doors,
       config: this.config,
       raceNumber: this.racesDone + 1,
       racesTotal: this.settings.races,

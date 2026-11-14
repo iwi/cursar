@@ -707,3 +707,20 @@ describe('hand-made maps', () => {
     expect(parseClientMessage('x'.repeat(70000))).toBe(null);
   });
 });
+
+describe('doors and keys', () => {
+  it('generates maps with the doors the host asked for, and tells everyone', () => {
+    const { room, clients } = setup();
+    const [ana, ben] = clients;
+    ben!.send({ t: 'settings', settings: { doors: 3 } });
+    expect(room.info().settings.doors).toBe(0);
+    ana!.send(parseClientMessage(JSON.stringify({ t: 'settings', settings: { doors: 99 } }))!);
+    expect(room.info().settings.doors).toBe(3);
+    ana!.send({ t: 'settings', settings: { doors: 2 } });
+    ana!.send({ t: 'start' });
+    const start = ben!.last('race');
+    expect(start.doors).toBe(2);
+    expect(room.raceState!.map.doors?.length).toBeGreaterThan(0);
+    expect(generateMap({ seed: start.seed, size: start.size, doors: start.doors }).id).toBe(room.raceState!.map.id);
+  });
+});

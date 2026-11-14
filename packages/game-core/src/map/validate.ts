@@ -44,7 +44,17 @@ export function validateMap(map: GameMap): MapValidation {
     }
     if (!reachable) errors.push(`Checkpoint ${i + 1} cannot be reached.`);
   });
-  if (errors.length === 0) routeLength = planRoute(map).length;
+  map.doors?.forEach((d, i) => {
+    let open = 0;
+    for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) if (!isSolid(map, x, y)) open++;
+    if (open === 0) errors.push(`Door ${i + 1} is inside a wall.`);
+    if (isSolid(map, Math.floor(d.key.x), Math.floor(d.key.y))) errors.push(`The key to door ${i + 1} is inside a wall.`);
+  });
+  if (errors.length === 0) {
+    routeLength = planRoute(map).length;
+    // Everything is reachable with the doors open, so a failure means a key is locked away.
+    if (routeLength < 0) errors.push('A key is behind a door it is needed for, so the race cannot be finished.');
+  }
 
   return { ok: errors.length === 0, errors, routeLength };
 }

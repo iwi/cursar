@@ -36,7 +36,7 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
 
   useEffect(() => {
     const demo = new URLSearchParams(window.location.search).has('demo');
-    const game = createGame(host.current!, { map, driver: createDriver(), finishArrow: settings.finishArrow, bindings: bindingsFor(settings), mouseMove: settings.mouseMove, bridge, audio, demo });
+    const game = createGame(host.current!, { map, driver: createDriver(), finishArrow: settings.finishArrow, bindings: bindingsFor(settings), mouseMove: settings.mouseMove, look: settings.look, bridge, audio, demo });
     const offHud = bridge.on('hud', setHud);
     const offRestart = bridge.on('restart', () => restart.current?.());
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -155,6 +155,12 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
           <div className="hearts" aria-label={`${hud.health} of ${hud.healthMax} hearts`}>
             {Array.from({ length: hud.healthMax }, (_, i) => (
               <i key={i} className={i < hud.health ? 'full' : ''}>♥</i>
+            ))}
+            {hud.keys.map((color) => (
+              <svg key={color} className="held-key" style={{ color: cssColor(color) }} viewBox="0 0 24 12" width="22" height="11" role="img" aria-label="A key you hold">
+                <circle cx="5" cy="6" r="3.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                <path d="M8.5 6H22M18 6v4M21.5 6v5" stroke="currentColor" strokeWidth="2.5" fill="none" />
+              </svg>
             ))}
           </div>
           {hud.effects.length > 0 && (

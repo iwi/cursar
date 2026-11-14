@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { type ClientMessage, ROOM_CODE_LENGTH, ROOM_CODE_LETTERS } from '@cursar/game-core';
 import { type Member, Room, type Send } from './room';
 
@@ -10,6 +11,14 @@ export interface RoomsOptions {
   randomId?: () => string;
   /** A number in [0, 1), for picking room codes. Injected so tests are repeatable. */
   random?: () => number;
+  /** When set, creating a room needs this password (joining with a code does not). */
+  hostPassword?: string;
+}
+
+/** Compares passwords without giving away, by timing, how much of a guess was right. */
+function samePassword(given: string, wanted: string): boolean {
+  const digest = (s: string) => createHash('sha256').update(s, 'utf8').digest();
+  return timingSafeEqual(digest(given), digest(wanted));
 }
 
 /** What a connection is attached to once its hello has been accepted. */
@@ -54,6 +63,15 @@ export class Rooms {
   join(send: Send, hello: Extract<ClientMessage, { t: 'hello' }>, close: (() => void) | null = null): Seat | null {
     let room: Room | undefined;
     if (hello.room === undefined) {
+      const wanted = this.options.hostPassword;
+      if (wanted && !samePassword(hello.password ?? '', wanted)) {
+        send({
+          t: 'error',
+          message: hello.password ? 'That password is not right.' : 'Creating a room needs the host password.',
+          need: 'password',
+        });
+        return null;
+      }
       if (this.rooms.size >= this.maxRooms) {
         send({ t: 'error', message: 'The server is busy: every room is in use. Try again in a few minutes.' });
         return null;

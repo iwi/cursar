@@ -176,6 +176,23 @@ Decided with the owner on 13 November and built the same day.
 - **Multiplayer**: the host picks one of their maps in the lobby; the server checks it fully (`decodeMap`: every field, size limits, playability) before using it, and sends it to everyone with the race. Every race in the series is on that map.
 - Graphics in the editor are plain, like the rest, until the visual style is chosen.
 
+## 4c. Entry screen, doors and keys, landmarks, host password (14 November)
+
+Decided with the owner on 14 November and built the same day.
+
+- **Entry screen:** the game opens on a choice of Solo race, Play with friends and Map editor (in that order), with Statistics as a link. Every option for that mode is chosen on the next screen. A shared room link still goes straight to the room.
+- **Doors and keys**, chosen before the map is made: **None, 1, 2 or 3** door-and-key pairs, in the solo menu and the room settings (default none). Each pair has its own colour (blue, orange, green, violet). A door sits in an opening between two cells and **cuts a checkpoint or the finish off from the start**; its key lies somewhere reachable **without passing any door**, far from the start (a dead end if possible), so it must be fetched. **Every runner picks up their own copy of the key**: the key stays on the map for the others, and the door opens only for runners carrying it. Keys are kept after a respawn. A locked door is a solid slab with a keyhole; once you hold its key only its frame shows, and the key no longer shows for you. Held keys show beside the hearts. Running into a locked door says which key to find. Doors are locked to chasers. Doors can be seen through (they block movement, not sight). Computer players plan their route with the keys. Doors use their own random stream, so a map without doors is exactly the map it was (same id, ghosts kept); a map with doors has its own id (`…-d2`). Hand-made maps can carry doors (checked by `decodeMap`: every key must be reachable), but the editor has no door tool yet. Asked-for doors that do not fit a layout are left out (rare); the map's name says how many it has.
+- **Landmarks** do nothing to runners, which new players could not tell. They are now drawn **flat into the floor**, like an inlaid mosaic (paving ring, outlined shape, no height or shadow); one **fades while anyone is over it**; and the first time a new player comes near one in a race, a **tip** says "Landmarks are only for remembering the way: run straight over them" (once per browser).
+- **Host password:** with `HOST_PASSWORD` set on the server, creating a room needs the password (remembered by the browser once it worked); joining with a room code does not. Without it set, anyone can create rooms, as before. Guessing is slowed by the existing limits: one try per connection, and a few connections a minute per address.
+
+## 4d. Visual style (14 November)
+
+The owner compared three sketched looks (pixel art, a hand-drawn map, neon) and chose to have **pixel art and the hand-drawn map, switched on the entry screen, pixel art by default**. The choice is kept in the browser's settings and applies to solo and multiplayer races.
+
+- **Pixel art:** the map is painted once at 16 pixels a tile and scaled up without smoothing: stone paving, brick walls with a lit top and a darker front, ice and mud, landmarks as mosaics. Runners are 16-pixel sprites with a 4-frame run cycle, turned to the nearest of eight directions, the shirt in the player's colour. Footprints are small squares; memory is dark.
+- **Hand-drawn map:** ink and watercolour on paper: hatched walls with sketched outlines, washes for ice and mud, landmarks as map symbols. Runners are ink figures with a scarf in the player's colour; your recent way shows as a dashed red line; memory is dark sepia.
+- **Built first:** the map, landmarks, runners (yours, rivals', the ghost), footprints and the fog. Hazards, enemies, treasures, doors, checkpoints and markers keep their earlier shapes for now. The map editor keeps its own plain drawing.
+
 ## 4b. Recordings (Phase 6)
 
 Decided with the owner on 13 November and built the same day.

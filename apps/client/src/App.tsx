@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { audio } from './audio/AudioEngine';
 import { type Settings, loadMaps, loadSettings, randomSeed, saveSettings } from './storage';
 import { Editor } from './ui/Editor';
+import { Home } from './ui/Home';
 import { Menu } from './ui/Menu';
 import { Multiplayer, roomFromAddress } from './ui/Multiplayer';
 import { Race } from './ui/Race';
@@ -22,8 +23,11 @@ export function App() {
   const [racing, setRacing] = useState<{ map: GameMap; attempt: number; custom: boolean } | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [showStats, setShowStats] = useState(false);
-  // Opening a shared room link goes straight to that room.
+  // The entry screen, or the solo options. Opening a shared room link goes straight to that room.
+  const [screen, setScreen] = useState<'home' | 'solo'>('home');
   const [online, setOnline] = useState(() => roomFromAddress() !== '');
+  /** Where the editor goes back to. */
+  const [editorFrom, setEditorFrom] = useState<'home' | 'solo'>('solo');
   // One config object for the session, so live tuning carries over between races.
   const config = useMemo<GameConfig>(() => cloneConfig(), []);
 
@@ -46,7 +50,7 @@ export function App() {
   const start = (from: Settings = settings) => {
     unlockAudio(from);
     const custom = from.mapId ? loadMaps().find((m) => m.id === from.mapId) : undefined;
-    const map = custom ?? generateMap({ seed: from.seed.trim() || 'cursar', size: from.size });
+    const map = custom ?? generateMap({ seed: from.seed.trim() || 'cursar', size: from.size, doors: from.doors });
     setRacing((current) => ({ map, attempt: (current?.attempt ?? 0) + 1, custom: Boolean(custom) }));
   };
 
@@ -56,7 +60,18 @@ export function App() {
     setRacing((current) => ({ map, attempt: (current?.attempt ?? 0) + 1, custom: true }));
   };
 
-  if (online) return <Multiplayer settings={settings} onChange={update} onExit={() => setOnline(false)} />;
+  if (online) {
+    return (
+      <Multiplayer
+        settings={settings}
+        onChange={update}
+        onExit={() => {
+          setOnline(false);
+          setScreen('home');
+        }}
+      />
+    );
+  }
 
   if (racing) {
     const fromEditor = editing !== null;
@@ -84,7 +99,10 @@ export function App() {
           setEditing({ map, savedId });
           testRace(map);
         }}
-        onExit={() => setEditing(null)}
+        onExit={() => {
+          setEditing(null);
+          setScreen(editorFrom);
+        }}
       />
     );
   }
@@ -94,14 +112,36 @@ export function App() {
       <Statistics
         onBack={() => setShowStats(false)}
         onRace={(id, record) => {
-          if (record.seed && record.size in MAP_SIZES) update({ mapId: '', seed: record.seed, size: record.size as MapSize });
+          if (record.seed && record.size in MAP_SIZES) update({ mapId: '', seed: record.seed, size: record.size as MapSize, doors: record.doors ?? 0 });
           else if (loadMaps().some((m) => m.id === id)) update({ mapId: id });
           else {
             window.alert('That map is no longer saved in this browser.');
             return;
           }
           setShowStats(false);
+          setScreen('solo');
         }}
+      />
+    );
+  }
+
+  const openOnline = () => {
+    unlockAudio(settings);
+    setOnline(true);
+  };
+
+  if (screen === 'home') {
+    return (
+      <Home
+        onSolo={() => setScreen('solo')}
+        onMultiplayer={openOnline}
+        onEditor={() => {
+          setEditorFrom('home');
+          setEditing({ map: null, savedId: null });
+        }}
+        onStats={() => setShowStats(true)}
+        look={settings.look}
+        onLook={(look) => update({ look })}
       />
     );
   }
@@ -111,12 +151,12 @@ export function App() {
       settings={settings}
       onChange={update}
       onStart={() => start()}
-      onEditor={(map) => setEditing({ map, savedId: map?.id ?? null })}
-      onStats={() => setShowStats(true)}
-      onMultiplayer={() => {
-        unlockAudio(settings);
-        setOnline(true);
+      onEditor={(map) => {
+        setEditorFrom('solo');
+        setEditing({ map, savedId: map?.id ?? null });
       }}
+      onStats={() => setShowStats(true)}
+      onBack={() => setScreen('home')}
     />
   );
 }

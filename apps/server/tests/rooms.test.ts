@@ -11,13 +11,13 @@ function sequence(seed = 1) {
   };
 }
 
-function setup(options: { maxRooms?: number } = {}) {
+function setup(options: { maxRooms?: number; hostPassword?: string } = {}) {
   const clock = { now: 0 };
   let n = 0;
   const rooms = new Rooms({ ...options, now: () => clock.now, randomId: () => `id${++n}-padding`, random: sequence() });
-  const join = (name: string, room?: string, token?: string) => {
+  const join = (name: string, room?: string, token?: string, password?: string) => {
     const inbox: ServerMessage[] = [];
-    const seat = rooms.join((m) => inbox.push(m), { t: 'hello', v: PROTOCOL_VERSION, name, color: 0, room, token });
+    const seat = rooms.join((m) => inbox.push(m), { t: 'hello', v: PROTOCOL_VERSION, name, color: 0, room, token, password });
     const welcome = inbox.find((m) => m.t === 'welcome') as Extract<ServerMessage, { t: 'welcome' }> | undefined;
     const error = inbox.find((m) => m.t === 'error') as Extract<ServerMessage, { t: 'error' }> | undefined;
     return { seat, inbox, welcome, error };
@@ -29,6 +29,26 @@ function setup(options: { maxRooms?: number } = {}) {
 }
 
 describe('rooms', () => {
+  it('asks for the host password to create a room, when one is set, but not to join one', () => {
+    const { rooms, join } = setup({ hostPassword: 'open sesame' });
+    const none = join('Ana');
+    expect(none.seat).toBeNull();
+    expect(none.error).toMatchObject({ need: 'password' });
+    const wrong = join('Ana', undefined, undefined, 'open sesame!');
+    expect(wrong.seat).toBeNull();
+    expect(wrong.error?.message).toMatch(/not right/);
+    expect(rooms.count).toBe(0);
+    const right = join('Ana', undefined, undefined, 'open sesame');
+    expect(right.seat).not.toBeNull();
+    const ben = join('Ben', right.welcome!.room);
+    expect(ben.seat).not.toBeNull();
+  });
+
+  it('lets anyone create rooms when no password is set', () => {
+    const { join } = setup();
+    expect(join('Ana', undefined, undefined, 'anything').seat).not.toBeNull();
+  });
+
   it('creates a room with a four-letter code when no code is given, and joins it by that code', () => {
     const { rooms, join } = setup();
     const ana = join('Ana');

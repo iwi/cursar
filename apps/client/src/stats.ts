@@ -6,8 +6,9 @@ export interface MapRecord {
   name: string;
   /** 'tiny' … 'large', or 'custom' for a hand-made map. */
   size: string;
-  /** A generated map's seed, so it can be raced again from the statistics. */
+  /** A generated map's seed (and doors), so it can be raced again from the statistics. */
   seed?: string;
+  doors?: number;
   runs: number;
   finishes: number;
   /** Sum of finishing times, for the average. */
@@ -62,6 +63,7 @@ export function loadStats(): Stats {
         name: typeof r.name === 'string' ? r.name : id,
         size: typeof r.size === 'string' ? r.size : 'custom',
         ...(typeof r.seed === 'string' ? { seed: r.seed } : {}),
+        ...(typeof r.doors === 'number' && r.doors > 0 ? { doors: Math.min(3, Math.round(r.doors)) } : {}),
         runs: num(r.runs),
         finishes: num(r.finishes),
         totalTime: num(r.totalTime),
@@ -83,6 +85,7 @@ function recordFor(stats: Stats, map: GameMap): MapRecord {
     name: map.name,
     size: mapSize(map),
     ...(map.generator ? { seed: map.generator.seed } : {}),
+    ...(map.generator?.doors ? { doors: map.generator.doors } : {}),
     runs: 0,
     finishes: 0,
     totalTime: 0,

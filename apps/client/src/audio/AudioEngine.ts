@@ -271,6 +271,16 @@ export class AudioEngine {
     [1319, 1760, 2349].forEach((freq, i) => this.tone({ freq, dur: 0.18, vol: 0.14, type: 'triangle', delay: i * 0.05 }));
   }
 
+  /** Picked up a key: a jingle. */
+  key(): void {
+    [1568, 2093, 1760, 2637].forEach((freq, i) => this.tone({ freq, dur: 0.09, vol: 0.1, type: 'square', delay: i * 0.045 }));
+  }
+
+  /** Ran into a locked door: a dull rattle. */
+  doorLocked(): void {
+    [0, 0.07].forEach((delay) => this.tone({ freq: 140, dur: 0.06, vol: 0.18, type: 'square', delay }));
+  }
+
   /** Skill cards on offer. */
   offer(): void {
     this.tone({ freq: 523, dur: 0.12, vol: 0.12, type: 'triangle' });

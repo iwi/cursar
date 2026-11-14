@@ -1,5 +1,5 @@
 import { type GameConfig, DEFAULT_CONFIG } from '../config';
-import { type GameMap, inRect, isSolid, tileAt } from '../map/types';
+import { type GameMap, eitherBlocks, inRect, isSolid, lockedDoors, tileAt } from '../map/types';
 import { clearEffects, controlledInput, tickEffects } from './effects';
 import { movePlayer } from './movement';
 import { closedGateCheck, gateTraps, hitObstacles, obstacleTime } from './obstacles';
@@ -75,6 +75,7 @@ export function createRace(map: GameMap, players: PlayerSetup[], config: GameCon
         safeTime: 0,
         hitGuard: 0,
         treasures: (map.treasures ?? []).map(() => false),
+        keys: (map.doors ?? []).map(() => false),
         points: 0,
         skills: [],
         threat: 0,
@@ -239,7 +240,7 @@ export function stepPlayer(
   gateTraps(state, p, events);
   const beforeX = p.x;
   const beforeY = p.y;
-  const impact = movePlayer(map, config, p, input, dt, closedGateCheck(map, config, obstacleTime(state)));
+  const impact = movePlayer(map, config, p, input, dt, wallsFor(state, p));
   p.terrain = tileAt(map, Math.floor(p.x), Math.floor(p.y));
   tickEffects(config, p, dt, events);
   p.safeTime = Math.max(0, p.safeTime - dt);
@@ -308,6 +309,20 @@ export function stepPlayer(
   if (touched.length > 0) offerSkills(state, p, events);
 
   p.noticeCooldown = Math.max(0, p.noticeCooldown - dt);
+  // Keys: every runner picks up their own copy.
+  map.doors?.forEach((door, index) => {
+    if (!p.keys[index] && Math.hypot(door.key.x - p.x, door.key.y - p.y) <= config.doors.keyReach) {
+      p.keys[index] = true;
+      events.push({ type: 'key', playerId: p.id, index });
+    } else if (!p.keys[index] && p.noticeCooldown === 0) {
+      const nx = Math.max(door.x, Math.min(p.x, door.x + door.w));
+      const ny = Math.max(door.y, Math.min(p.y, door.y + door.h));
+      if (Math.hypot(p.x - nx, p.y - ny) <= config.doors.noticeReach) {
+        p.noticeCooldown = 2;
+        events.push({ type: 'doorLocked', playerId: p.id, index });
+      }
+    }
+  });
   if (inRect(map.finish, p.x, p.y)) {
     if (remaining > 0) {
       if (p.noticeCooldown === 0) {
@@ -325,4 +340,9 @@ export function stepPlayer(
     events.push({ type: 'finish', playerId: p.id, time: state.raceTime, place });
     state.deadline = Math.min(state.deadline, state.raceTime + config.race.finishGraceSeconds);
   }
+}
+
+/** What stops a runner besides walls: closed gates, and doors they have no key for. */
+export function wallsFor(state: RaceState, p: PlayerState): ((tx: number, ty: number) => boolean) | null {
+  return eitherBlocks(closedGateCheck(state.map, state.config, obstacleTime(state)), lockedDoors(state.map, p.keys));
 }

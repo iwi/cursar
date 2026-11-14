@@ -27,8 +27,8 @@ const STAND: Move = { mx: 0, my: 0 };
 const AXES: Move[] = [{ mx: 1, my: 0 }, { mx: -1, my: 0 }, { mx: 0, my: 1 }, { mx: 0, my: -1 }];
 
 /**
- * A route-follower: it takes the shortest tour of the checkpoints and then the
- * finish, walking downhill on each target's distance field. Used by tests, the
+ * A route-follower: it takes the shortest tour of the checkpoints (and keys,
+ * when the map has doors) and then the finish, walking downhill on each target's distance field. Used by tests, the
  * client's demo mode and computer players.
  *
  * Its route steps round traps. Given a `caution`, it also watches the
@@ -39,7 +39,7 @@ const AXES: Move[] = [{ mx: 1, my: 0 }, { mx: -1, my: 0 }, { mx: 0, my: 1 }, { m
  */
 export function createAutopilot(
   map: GameMap,
-): (p: { x: number; y: number; checkpoints: boolean[] }, sprint?: boolean, caution?: Caution) => PlayerInput {
+): (p: { x: number; y: number; checkpoints: boolean[]; keys?: boolean[] }, sprint?: boolean, caution?: Caution) => PlayerInput {
   const routeMap = avoidPosts(map);
   const plan = planRoute(routeMap);
   let seq = 0;
@@ -70,8 +70,9 @@ export function createAutopilot(
   };
 
   return (p, sprint = false, caution) => {
-    const next = plan.order.find((index) => !p.checkpoints[index]);
-    const dist = plan.fields[next ?? map.checkpoints.length]!;
+    const step = plan.steps.findIndex((s) => (s.kind === 'checkpoint' ? !p.checkpoints[s.index] : !p.keys?.[s.index]));
+    const dist = step >= 0 ? plan.steps[step]!.field : plan.finish;
+    const next = step >= 0 ? step : undefined;
     const dir = routeDir(dist, p.x, p.y);
     if (caution && (map.obstacles?.length || map.enemies?.length)) {
       const now = obstacleTime(caution.state);

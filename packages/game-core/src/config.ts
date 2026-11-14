@@ -127,6 +127,12 @@ export interface GameConfig {
     /** Enemy sounds carry this far (tiles). */
     hearingRange: number;
   };
+  doors: {
+    /** A key is picked up within this distance (tiles) of its centre. */
+    keyReach: number;
+    /** A runner this close (tiles) to a door they have no key for is told it is locked. */
+    noticeReach: number;
+  };
   treasures: {
     /** Collected within this distance (tiles) of its centre. */
     reach: number;
@@ -250,6 +256,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     turret: { range: 9, turnRate: 2.5, chargeSeconds: 0.8, reloadSeconds: 2.5, boltSpeed: 6, boltRadius: 0.2, slowSeconds: 3 },
     hearingRange: 12,
   },
+  doors: { keyReach: 0.7, noticeReach: 0.45 },
   treasures: { reach: 0.7, pointsEach: 1 },
   skills: {
     trapSenseDelaySeconds: 0.5,
