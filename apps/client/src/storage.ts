@@ -21,9 +21,11 @@ export interface Settings {
   color: number;
   /** How the race is drawn: pixel art or a hand-drawn map. */
   look: Look;
+  /** Draw runners, plazas and doors in the colour-blind friendly palette (`palette.ts`). */
+  colourSafe: boolean;
 }
 
-const DEFAULTS: Settings = { size: 'small', seed: '', doors: 0, finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000, look: 'pixel' };
+const DEFAULTS: Settings = { size: 'small', seed: '', doors: 0, finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000, look: 'pixel', colourSafe: false };
 const SETTINGS_KEY = 'cursar.settings';
 
 // Storage can be unavailable (private windows, blocked site data): the game must still run.
@@ -57,6 +59,7 @@ export function remove(key: string): void {
 export function loadSettings(): Settings {
   const loaded = { ...DEFAULTS, ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
   if (!isLook(loaded.look)) loaded.look = DEFAULTS.look;
+  loaded.colourSafe = loaded.colourSafe === true;
   return loaded;
 }
 

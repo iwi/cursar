@@ -250,6 +250,36 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .tuning output { font-variant-numeric: tabular-nums; color: var(--accent); }
 .tuning input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
 
+/* Touch controls (phones and tablets): the stick on the left half, buttons on the right. */
+.touch-controls { position: absolute; inset: 0; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+.touch-stick-zone { position: absolute; left: 0; top: 30%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+.touch-stick-hint {
+  position: absolute; left: 24px; bottom: 28px; padding: 6px 10px; border-radius: 999px;
+  background: rgba(11, 13, 18, 0.55); color: var(--muted); font-size: 13px;
+}
+.touch-stick {
+  position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08); border: 2px solid rgba(255, 255, 255, 0.35);
+}
+.touch-stick i {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.touch-buttons {
+  position: absolute; right: 18px; bottom: 22px; display: grid; grid-template-columns: auto auto; gap: 14px; align-items: end;
+  pointer-events: auto; touch-action: none;
+}
+.touch-buttons button {
+  width: 76px; height: 76px; border-radius: 50%; padding: 0; font-size: 14px; font-weight: 700;
+  background: rgba(21, 25, 34, 0.75); border: 2px solid rgba(255, 255, 255, 0.4); color: var(--text);
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.touch-buttons .touch-sprint { width: 92px; height: 92px; }
+.touch-buttons .touch-sprint.on { border-color: var(--good); color: var(--good); background: rgba(40, 70, 48, 0.8); }
+.touch-buttons .touch-shove.off { opacity: 0.45; }
+.race:has(.touch-controls) .hud-bottom { bottom: 128px; }
+.colour-safe { margin-top: 4px; }
+
 @media (max-width: 640px) {
   .sizes, .facts { grid-template-columns: 1fr; }
   .timer { font-size: 26px; }
@@ -339,3 +369,16 @@ small.bad { color: var(--bad); }
 .look-switch button:hover:not(.on), .look-switch button:focus-visible { border-color: var(--accent); }
 button.link { background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; justify-self: center; padding: 4px; }
 button.link:hover { color: var(--text); }
+
+/* Tutorial coach */
+.coach {
+  position: absolute; left: 16px; bottom: 90px; max-width: min(360px, calc(100% - 32px)); display: grid; gap: 4px;
+  padding: 10px 14px; border-radius: 12px; background: rgba(21, 25, 34, 0.94); border: 1px solid var(--accent);
+  pointer-events: none; animation: rise 0.3s ease-out both;
+}
+.coach strong { color: var(--accent); }
+.coach span { color: var(--text); font-size: 14px; line-height: 1.4; }
+.race:has(.touch-controls) .coach { top: 70px; bottom: auto; }
+.mode.tutorial { border-color: var(--accent); }
+
+.home-links { display: flex; gap: 16px; justify-content: center; }

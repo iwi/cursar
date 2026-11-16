@@ -1,3 +1,4 @@
+import { runnerColor } from '../palette';
 import { type GameMap, MAP_SIZES, type ResultRow, type RoomInfo, type ServerMessage, decodeMap, generateMap, ghostFromRoute, routeDistance } from '@cursar/game-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NetDriver } from '../game/NetDriver';
@@ -155,7 +156,7 @@ export function NetRace({ start, results, room, connection, settings, onChange, 
                     <tr key={row.id} className={row.id === connection.id ? 'me' : ''}>
                       <td>{row.place ?? '–'}</td>
                       <td>
-                        <i className="dot" style={{ background: hex(row.color) }} />
+                        <i className="dot" style={{ background: hex(runnerColor(row.color)) }} />
                         {row.name}
                       </td>
                       <td>{row.time !== null ? formatTime(row.time) : `Did not finish (${row.checkpoints}/${map.checkpoints.length})`}</td>

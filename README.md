@@ -2,7 +2,7 @@
 
 A top-down racing game about navigation and memory. You are shown the whole map for a few seconds, then you run it with a restricted view: touch every checkpoint, in any order, then reach the finish.
 
-It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, is in: effects, health, moving obstacles, traps and enemies. Phase 4 (treasures, skills, the shove), Phase 5 (the map editor) and Phase 6 (recordings: several ghosts, ghost files, statistics) are in. The race can be drawn as pixel art (the default) or as a hand-drawn map, chosen on the entry screen. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+It has a solo mode against the ghost of your best run, and multiplayer for 2–8 players in rooms you join with a code, on your own network or over the internet at https://cursarserver-production.up.railway.app (roadmap Phases 0–2b). Phase 3, hazards, is in: effects, health, moving obstacles, traps and enemies. Phase 4 (treasures, skills, the shove), Phase 5 (the map editor) and Phase 6 (recordings: several ghosts, ghost files, statistics) are in. The race can be drawn as pixel art (the default) or as a hand-drawn map, chosen on the entry screen, which also has a colour-blind friendly palette and, for new players, a short guided tutorial. Phones and tablets get an on-screen stick and buttons. Design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Run it
 
@@ -31,7 +31,7 @@ Leave that terminal open while you play; `Ctrl+C` stops the server.
 
 If other computers cannot open the address, the host computer's firewall is the usual cause: allow Node.js to accept incoming connections on private networks (Windows asks about this the first time; on macOS it is under System Settings → Network → Firewall).
 
-The host can add **computer players** in the lobby (Easy, Normal or Hard). They take the best route, so their level is how fast they run. This is also the way to try multiplayer alone.
+The host can add **computer players** in the lobby (Easy, Normal or Hard). They take the best route, though now and then one takes a wrong turn and has to come back; their level is how fast they run and how often they go wrong. This is also the way to try multiplayer alone.
 
 The host can **remove** a player from the lobby, from the results, or while they wait for the next race (not mid-race). A removed player cannot rejoin that room from the same browser tab.
 
@@ -68,8 +68,9 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 | Full map | `M` or the Map button during the race; you stand still while it is open, and the clock keeps running |
 | Shove | `Space`: pushes a rival or an awake chaser in front of you (uses stamina) |
 | Take a skill card | `1` `2` `3` when cards are offered |
+| On a phone or tablet | Drag on the left half of the screen to run; Sprint and Shove buttons on the right; tap the map in the preview for waypoints |
 
-- The **map editor** (from the menu) lets you make your own maps on the maze grid: open walls, place the start, finish, checkpoints, traps, coins, enemies and obstacles, then save, race, or export them as a file. Saved maps can be chosen in the menu, and by the host in a multiplayer room.
+- The **map editor** (from the menu) lets you make your own maps on the maze grid: open walls, place the start, finish, checkpoints, traps, coins, enemies and obstacles, then save, race, or export them as a file. Doors and keys can be placed too: click an opening for the door, then a cell for its key. Saved maps can be chosen in the menu, and by the host in a multiplayer room.
 - The **map seed** decides the map. The same seed and size always give the same map, so you can share a seed or return to beat your time.
 - **Checkpoints** are the pink flags. The finish only counts once you have touched them all; the order is up to you.
 - You have **3 hearts**. A new checkpoint restores them; losing the last sends you back to the last checkpoint you touched.
@@ -78,7 +79,7 @@ To use a different port: `npm run start -w @cursar/server -- --port 8080` (after
 - **Treasures and skills**: gold coins are worth a point each. Touch a checkpoint with points to spend and three skill cards appear; press `1`, `2` or `3` to take one without stopping. Skills last the race. Each card also adds threat: enemies go for high-threat runners first, and traps catch them more easily.
 - **Enemies**: purple patrollers walk a winding beat back and forth, turning corners (hug the wall to squeeze past; a touch costs a heart). Red chasers sleep until you come close, then chase you; break their line of sight to lose them (a catch costs a heart and stuns you). Turrets turn, whir and fire slow bolts that slow you; dodge or duck behind a wall. Listen: you hear each kind before you see it.
 - In a solo race, a white **ghost** races alongside you: your best run on the map, unless you choose another in the menu. Your last few runs are kept too, and you can keep any finished runner's ghost from multiplayer results or open a ghost file a friend exported. After each run you get a summary (checkpoint times against your best, hearts lost, traps, distance); **Statistics** in the menu has your totals and a record per map. All of it is kept in the browser.
-- Maps can have **doors and keys** (none to three pairs, chosen before the race): a coloured door blocks the way to a checkpoint or the finish until you fetch its key. Everyone picks up their own key.
+- Maps can have **doors and keys** (none to three pairs, chosen before the race): a coloured door, marked with a shape its key shares, blocks the way to a checkpoint or the finish until you fetch its key. Everyone picks up their own key.
 - In multiplayer you only see rivals, and their footprints, inside your own view. You can hear their footsteps a little further away. When the first runner finishes, everyone else has 30 seconds.
 - A runner who has finished watches the rest of the race on the full map.
 - After a race the map is revealed with the route each runner took.

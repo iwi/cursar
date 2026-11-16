@@ -459,8 +459,8 @@ export class Room {
     race.racers.forEach((m, i) => {
       if (!m.bot) return;
       // A computer player steers along the best route at a share of full speed, watching for obstacles.
-      const speed = BOT_LEVELS[m.bot].speed;
-      const steer = race.pilot(state.players[i]!, false, { state, speed });
+      const { speed, mistakes } = BOT_LEVELS[m.bot];
+      const steer = race.pilot(state.players[i]!, false, { state, speed, mistakes });
       inputs[m.id] = { seq: steer.seq, mx: steer.mx * speed, my: steer.my * speed, sprint: false };
     });
     for (const m of race.racers) {

@@ -1,3 +1,4 @@
+import { runnerColor } from '../palette';
 import { type GameConfig, type GameMap, PLAYER_COLORS } from '@cursar/game-core';
 import { useMemo, useState } from 'react';
 import { LocalDriver, type LocalResult } from '../game/driver';
@@ -127,7 +128,7 @@ export function Race({ map, config, settings, onChange, onRetry, onNewMap, onMen
                 <RunReport outcome={outcome} />
                 {!outcome.saved && <p className="delta bad">This browser’s storage is full, so the run was not kept as a ghost. Delete some ghosts or maps to make room.</p>}
                 <p className="legend">
-                  <span className="swatch you" style={{ background: hex(settings.color) }} /> Your route
+                  <span className="swatch you" style={{ background: hex(runnerColor(settings.color)) }} /> Your route
                   {ghost && (<><span className="swatch best" /> {ghostName}</>)}
                 </p>
               </div>

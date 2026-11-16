@@ -6,7 +6,9 @@ import { createGame } from '../game/createGame';
 import type { RaceDriver } from '../game/driver';
 import { EFFECT_STYLE, cssColor } from '../game/effects';
 import { bindingsFor } from '../game/input';
+import { doorName, doorStyle, shapePoints } from '../game/doors';
 import { type Settings, formatTime } from '../storage';
+import { TouchControls, isTouchDevice } from './TouchControls';
 
 interface Props {
   map: GameMap;
@@ -31,6 +33,7 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
   const bridge = useMemo(() => new Bridge(), []);
   const [hud, setHud] = useState<HudState | null>(null);
   const [notice, setNotice] = useState<{ text: string; id: number } | null>(null);
+  const [touch] = useState(isTouchDevice);
   const restart = useRef(onRestartKey);
   restart.current = onRestartKey;
 
@@ -97,7 +100,7 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => bridge.emit('toggleMap')}
             >
-              {hud.mapOpen ? 'Close map (M)' : 'Map (M)'}
+              {touch ? (hud.mapOpen ? 'Close map' : 'Map') : hud.mapOpen ? 'Close map (M)' : 'Map (M)'}
             </button>
           )}
           <button type="button" onClick={() => onChange({ muted: !settings.muted })}>{settings.muted ? 'Sound off' : 'Sound on'}</button>
@@ -111,14 +114,14 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
           <span>
             Touch all {hud.checkpointsTotal} pink checkpoints in any order, then reach the chequered finish. You are the pulsing runner.{' '}
             {markersLeft > 0
-              ? `Click the map to drop ${markersLeft} more waypoint${markersLeft === 1 ? '' : 's'}.`
-              : 'All waypoints placed (right-click removes the last).'}
+              ? `${touch ? 'Tap' : 'Click'} the map to drop ${markersLeft} more waypoint${markersLeft === 1 ? '' : 's'}.`
+              : touch ? 'All waypoints placed.' : 'All waypoints placed (right-click removes the last).'}
           </span>
           {readiness?.mine ? (
             <em>Waiting for the others — {readiness.ready} of {readiness.total} ready</em>
           ) : (
             <button type="button" onClick={() => bridge.emit('skipPreview')}>
-              I’m ready (Enter){readiness && readiness.total > 1 ? ` — ${readiness.ready} of ${readiness.total} ready` : ''}
+              I’m ready{touch ? '' : ' (Enter)'}{readiness && readiness.total > 1 ? ` — ${readiness.ready} of ${readiness.total} ready` : ''}
             </button>
           )}
         </div>
@@ -156,12 +159,16 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
             {Array.from({ length: hud.healthMax }, (_, i) => (
               <i key={i} className={i < hud.health ? 'full' : ''}>♥</i>
             ))}
-            {hud.keys.map((color) => (
-              <svg key={color} className="held-key" style={{ color: cssColor(color) }} viewBox="0 0 24 12" width="22" height="11" role="img" aria-label="A key you hold">
-                <circle cx="5" cy="6" r="3.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                <path d="M8.5 6H22M18 6v4M21.5 6v5" stroke="currentColor" strokeWidth="2.5" fill="none" />
-              </svg>
-            ))}
+            {hud.keys.map((door) => {
+              const { color, shape } = doorStyle(door);
+              const bow = shapePoints(shape).map((q) => `${(5 + q.x * 4).toFixed(2)},${(6 + q.y * 4).toFixed(2)}`).join(' ');
+              return (
+                <svg key={door} className="held-key" style={{ color: cssColor(color) }} viewBox="0 0 24 12" width="22" height="11" role="img" aria-label={`You hold the ${doorName(door)} key`}>
+                  <polygon points={bow} fill="currentColor" stroke="#10131a" strokeWidth="1" />
+                  <path d="M9 6H22M18 6v4M21.5 6v5" stroke="currentColor" strokeWidth="2.5" fill="none" />
+                </svg>
+              );
+            })}
           </div>
           {hud.effects.length > 0 && (
             <div className="effects">
@@ -178,7 +185,7 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
           </div>
           <span>
             {hud.exhausted ? 'Out of breath' : hud.terrain === 'Floor' ? 'Stamina' : `On ${hud.terrain.toLowerCase()}`}
-            {hud.shoveReady && <> · <kbd>Space</kbd> shove</>}
+            {hud.shoveReady && !touch && <> · <kbd>Space</kbd> shove</>}
           </span>
         </div>
       )}
@@ -186,9 +193,11 @@ export function RaceView({ map, createDriver, settings, onChange, title, subtitl
       {phase === 'racing' && hud?.mapOpen && (
         <div className="banner map-banner">
           <strong>Full map — you are standing still</strong>
-          <span>The clock and the others keep going. Press M to close it.</span>
+          <span>The clock and the others keep going. {touch ? 'Tap Close map' : 'Press M'} to close it.</span>
         </div>
       )}
+
+      {touch && hud && phase === 'racing' && !hud.spectating && !hud.mapOpen && !hud.paused && <TouchControls bridge={bridge} shoveReady={hud.shoveReady} />}
 
       {notice && <div className="notice" key={notice.id}>{notice.text}</div>}
 

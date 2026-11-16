@@ -1,3 +1,5 @@
+import { setColourSafe } from './palette';
+import { Tutorial, tutorialSeen } from './ui/Tutorial';
 import { type GameConfig, type GameMap, MAP_SIZES, type MapSize, cloneConfig, generateMap } from '@cursar/game-core';
 import { useMemo, useState } from 'react';
 import { audio } from './audio/AudioEngine';
@@ -23,6 +25,7 @@ export function App() {
   const [racing, setRacing] = useState<{ map: GameMap; attempt: number; custom: boolean } | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
   // The entry screen, or the solo options. Opening a shared room link goes straight to that room.
   const [screen, setScreen] = useState<'home' | 'solo'>('home');
   const [online, setOnline] = useState(() => roomFromAddress() !== '');
@@ -30,6 +33,8 @@ export function App() {
   const [editorFrom, setEditorFrom] = useState<'home' | 'solo'>('solo');
   // One config object for the session, so live tuning carries over between races.
   const config = useMemo<GameConfig>(() => cloneConfig(), []);
+  // Read while drawing, by the race and the screens below.
+  setColourSafe(settings.colourSafe);
 
   const update = (patch: Partial<Settings>) => {
     const next = { ...settings, ...patch };
@@ -130,9 +135,32 @@ export function App() {
     setOnline(true);
   };
 
+  if (tutorial) {
+    return (
+      <Tutorial
+        config={config}
+        settings={settings}
+        onChange={update}
+        onDone={() => {
+          setTutorial(false);
+          setScreen('solo');
+        }}
+        onExit={() => {
+          setTutorial(false);
+          setScreen('home');
+        }}
+      />
+    );
+  }
+
   if (screen === 'home') {
     return (
       <Home
+        onTutorial={() => {
+          unlockAudio(settings);
+          setTutorial(true);
+        }}
+        tutorialSeen={tutorialSeen()}
         onSolo={() => setScreen('solo')}
         onMultiplayer={openOnline}
         onEditor={() => {
@@ -142,6 +170,8 @@ export function App() {
         onStats={() => setShowStats(true)}
         look={settings.look}
         onLook={(look) => update({ look })}
+        colourSafe={settings.colourSafe}
+        onColourSafe={(colourSafe) => update({ colourSafe })}
       />
     );
   }

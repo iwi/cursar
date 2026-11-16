@@ -5,12 +5,17 @@ interface Props {
   onMultiplayer: () => void;
   onEditor: () => void;
   onStats: () => void;
+  onTutorial: () => void;
+  /** The tutorial has been finished or skipped in this browser. */
+  tutorialSeen: boolean;
   look: Look;
   onLook: (look: Look) => void;
+  colourSafe: boolean;
+  onColourSafe: (on: boolean) => void;
 }
 
 /** The entry screen: what to play. Every option is chosen on the next screen. */
-export function Home({ onSolo, onMultiplayer, onEditor, onStats, look, onLook }: Props) {
+export function Home({ onSolo, onMultiplayer, onEditor, onStats, onTutorial, tutorialSeen, look, onLook, colourSafe, onColourSafe }: Props) {
   return (
     <main className="menu">
       <div className="menu-card home">
@@ -19,7 +24,13 @@ export function Home({ onSolo, onMultiplayer, onEditor, onStats, look, onLook }:
           <p>Study the map. Then run it from memory: touch every checkpoint, in any order, and reach the finish.</p>
         </header>
         <nav className="modes" aria-label="What to play">
-          <button type="button" className="mode" onClick={onSolo} autoFocus>
+          {!tutorialSeen && (
+            <button type="button" className="mode tutorial" onClick={onTutorial} autoFocus>
+              <strong>New here? Tutorial</strong>
+              <span>A short guided race: the preview, checkpoints, sprinting and the full map.</span>
+            </button>
+          )}
+          <button type="button" className="mode" onClick={onSolo} autoFocus={tutorialSeen}>
             <strong>Solo race</strong>
             <span>Race the clock and a ghost of your best run.</span>
           </button>
@@ -48,7 +59,14 @@ export function Home({ onSolo, onMultiplayer, onEditor, onStats, look, onLook }:
           ))}
           <small className="look-note">{LOOKS.find((option) => option.id === look)?.description}</small>
         </div>
-        <button type="button" className="link" onClick={onStats}>Statistics</button>
+        <label className="check colour-safe">
+          <input type="checkbox" checked={colourSafe} onChange={(event) => onColourSafe(event.target.checked)} />
+          <span>Colour-blind friendly colours <small>(runners, plazas, doors and keys; doors and keys also carry shapes)</small></span>
+        </label>
+        <div className="home-links">
+          <button type="button" className="link" onClick={onStats}>Statistics</button>
+          {tutorialSeen && <button type="button" className="link" onClick={onTutorial}>Tutorial</button>}
+        </div>
       </div>
     </main>
   );

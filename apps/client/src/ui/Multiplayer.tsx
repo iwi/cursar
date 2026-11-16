@@ -1,3 +1,4 @@
+import { runnerColor } from '../palette';
 import {
   BOT_LEVELS,
   type BotLevel,
@@ -338,7 +339,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
           <ul className="players">
             {room.players.map((p) => (
               <li key={p.id} className={p.connected ? '' : 'away'}>
-                <i className="dot" style={{ background: hex(p.color) }} />
+                <i className="dot" style={{ background: hex(runnerColor(p.color)) }} />
                 <span className="who">
                   {p.name}
                   {p.id === connection.id && <small> (you)</small>}
@@ -388,7 +389,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
                   key={color}
                   type="button"
                   className={me?.color === color ? 'chosen' : ''}
-                  style={{ background: hex(color) }}
+                  style={{ background: hex(runnerColor(color)) }}
                   disabled={taken.has(color)}
                   aria-label={`Colour ${hex(color)}${taken.has(color) ? ' (taken)' : ''}`}
                   onClick={() => pickColor(color)}

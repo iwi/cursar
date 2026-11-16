@@ -28,6 +28,8 @@ import {
   landmarkPoint,
   paintCell,
   placeBoulder,
+  placeDoor,
+  startDoor,
   placeStart,
   setOpen,
   spotAt,
@@ -38,6 +40,7 @@ import {
   toggleTrap,
   toggleTreasure,
 } from '../editor/tools';
+import { doorStyle, shapePoints } from '../game/doors';
 import { TRAP_STYLE, cssColor } from '../game/effects';
 import { loadMaps, saveMap } from '../storage';
 
@@ -82,6 +85,8 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
   const [trapKind, setTrapKind] = useState<TrapKind>('spikes');
   const [beat, setBeat] = useState<{ c: number; r: number }[] | null>(null);
   const [boulderFrom, setBoulderFrom] = useState<{ c: number; r: number } | null>(null);
+  /** The opening a new door goes in, while its key's cell is awaited. */
+  const [doorAt, setDoorAt] = useState<Spot | null>(null);
   const [hover, setHover] = useState<{ fx: number; fy: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -128,6 +133,7 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
     setUndo([]);
     setBeat(null);
     setBoulderFrom(null);
+    setDoorAt(null);
     setDirty(false);
     setMessage(null);
   };
@@ -146,6 +152,7 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
       } else if (event.key === 'Escape') {
         setBeat(null);
         setBoulderFrom(null);
+    setDoorAt(null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -205,6 +212,39 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
       g.beginPath();
       g.arc(t.x * s, t.y * s, s * 0.35, 0, Math.PI * 2);
       g.fill();
+    }
+    // Doors and keys: each pair in its own colour, marked with its shape.
+    const mark = (shape: Parameters<typeof shapePoints>[0], x: number, y: number, r: number, fill: string) => {
+      g.fillStyle = fill;
+      g.strokeStyle = '#10131a';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      shapePoints(shape).forEach((q, i) => (i ? g.lineTo((x + q.x * r) * s, (y + q.y * r) * s) : g.moveTo((x + q.x * r) * s, (y + q.y * r) * s)));
+      g.closePath();
+      g.fill();
+      g.stroke();
+    };
+    (map.doors ?? []).forEach((d, i) => {
+      const { color, shape } = doorStyle(i);
+      g.fillStyle = cssColor(color);
+      g.fillRect(d.x * s, d.y * s, d.w * s, d.h * s);
+      g.strokeStyle = '#10131a';
+      g.lineWidth = 2;
+      g.strokeRect(d.x * s, d.y * s, d.w * s, d.h * s);
+      mark(shape, d.x + d.w / 2, d.y + d.h / 2, 0.38, '#ffffff');
+      g.strokeStyle = cssColor(color);
+      g.setLineDash([s * 0.2, s * 0.2]);
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo((d.x + d.w / 2) * s, (d.y + d.h / 2) * s);
+      g.lineTo(d.key.x * s, d.key.y * s);
+      g.stroke();
+      g.setLineDash([]);
+      mark(shape, d.key.x, d.key.y, 0.6, cssColor(color));
+    });
+    if (doorAt) for (const p of spotTiles(doorAt)) {
+      g.fillStyle = cssColor(doorStyle(map.doors?.length ?? 0).color);
+      g.fillRect(p.x * s, p.y * s, s, s);
     }
     for (const o of map.obstacles ?? []) {
       if (o.kind === 'boulder') {
@@ -269,7 +309,7 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
       if (tool === 'trap' || tool === 'erase') g.fillRect(Math.floor(hover.fx) * s, Math.floor(hover.fy) * s, s, s);
       else if (spot) for (const p of spotTiles(spot)) g.fillRect(p.x * s, p.y * s, s, s);
     }
-  }, [map, scale, hover, beat, boulderFrom, tool]);
+  }, [map, scale, hover, beat, boulderFrom, doorAt, tool]);
 
   const pointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -343,6 +383,7 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
         } else {
           const from = boulderFrom;
           setBoulderFrom(null);
+    setDoorAt(null);
           change((d) => placeBoulder(d, from, cell));
         }
         return;
@@ -352,6 +393,27 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
       case 'barrier':
         change((d) => cycleBarrier(d, { x: fx, y: fy }));
         return;
+      case 'door': {
+        if (doorAt) {
+          if (!cell) {
+            setMessage('Now click a cell for the key.');
+            return;
+          }
+          const opening = doorAt;
+          setDoorAt(null);
+          change((d) => placeDoor(d, opening, cell.c, cell.r));
+          return;
+        }
+        if (!spot) return;
+        const probe = startDoor(clone(map), spot);
+        if ('error' in probe) setMessage(probe.error);
+        else if ('removed' in probe) change((d) => void startDoor(d, spot));
+        else {
+          setDoorAt(spot);
+          setMessage('Now click a cell for its key: somewhere reachable without passing this door.');
+        }
+        return;
+      }
       case 'erase':
         change((d) => void eraseAt(d, fx, fy));
         return;
@@ -362,6 +424,7 @@ export function Editor({ initial, savedId: openedId, onTest, onExit }: Props) {
     setTool(id);
     setBeat(null);
     setBoulderFrom(null);
+    setDoorAt(null);
     setMessage(null);
   };
 

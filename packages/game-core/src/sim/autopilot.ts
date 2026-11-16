@@ -1,4 +1,5 @@
 import { planRoute } from '../map/route';
+import { Rng, hashString } from '../rng';
 import { type GameMap, Tile, isSolid } from '../map/types';
 import { patrollerDanger } from './enemies';
 import { dangerAt, obstacleTime } from './obstacles';
@@ -8,6 +9,11 @@ import type { PlayerInput, RaceState } from './types';
 export interface Caution {
   state: RaceState;
   speed: number;
+  /**
+   * The chance, at each fork it reaches, that the runner loses track and takes
+   * a wrong branch for a while (see `wrongTurn`). Leave out for none.
+   */
+  mistakes?: number;
 }
 
 /** How far ahead (seconds) a careful computer player looks, in steps of `LOOK_STEP`, and the berth it gives obstacles (tiles). */
@@ -39,12 +45,14 @@ const AXES: Move[] = [{ mx: 1, my: 0 }, { mx: -1, my: 0 }, { mx: 0, my: 1 }, { m
  */
 export function createAutopilot(
   map: GameMap,
-): (p: { x: number; y: number; checkpoints: boolean[]; keys?: boolean[] }, sprint?: boolean, caution?: Caution) => PlayerInput {
+): (p: { id?: string; x: number; y: number; checkpoints: boolean[]; keys?: boolean[] }, sprint?: boolean, caution?: Caution) => PlayerInput {
   const routeMap = avoidPosts(map);
   const plan = planRoute(routeMap);
   let seq = 0;
   /** Per runner (one autopilot steers every computer player in a race): progress towards the current target. */
   const progress = new WeakMap<object, { target: number; best: number; at: number; boldUntil: number }>();
+  /** Per runner: its wrong turns (see `wrongTurn`). */
+  const lost = new WeakMap<object, Lost>();
 
   /** The direction along the route from (x, y), towards the neighbouring tile nearest the target. */
   const routeDir = (dist: Int32Array, x: number, y: number): Move => {
@@ -74,6 +82,20 @@ export function createAutopilot(
     const dist = step >= 0 ? plan.steps[step]!.field : plan.finish;
     const next = step >= 0 ? step : undefined;
     const dir = routeDir(dist, p.x, p.y);
+    if (caution?.mistakes) {
+      let record = lost.get(p);
+      if (!record) {
+        record = { rng: new Rng(hashString(`${map.id}:${p.id ?? ''}`)), tile: -1, wrong: null, until: 0, pauseUntil: 0, calmUntil: 0 };
+        lost.set(p, record);
+      }
+      const move = wrongTurn(routeMap, caution, record, p, dist, dir);
+      // Lost, but not blind: heading into an obstacle or an enemy's way ends it at once.
+      if (move && clearAhead(map, caution, p, move)) return { seq: ++seq, mx: move.mx, my: move.my, sprint: false };
+      if (move) {
+        record.wrong = null;
+        record.pauseUntil = 0;
+      }
+    }
     if (caution && (map.obstacles?.length || map.enemies?.length)) {
       const now = obstacleTime(caution.state);
       const target = next ?? -1;
@@ -97,6 +119,99 @@ export function createAutopilot(
     }
     return { seq: ++seq, mx: dir.mx, my: dir.my, sprint };
   };
+}
+
+/** Whether keeping to `move` for the next `ROUTE_AHEAD` seconds is clear of the obstacles' and patrollers' known motion. */
+function clearAhead(map: GameMap, caution: Caution, p: { x: number; y: number }, move: Move): boolean {
+  const { state } = caution;
+  const now = obstacleTime(state);
+  const pace = state.config.player.maxSpeed * caution.speed;
+  let { x, y } = p;
+  for (let t = 0; t <= ROUTE_AHEAD + 1e-9; t += LOOK_STEP) {
+    if (dangerAt(state, now + t, x, y, BERTH) || patrollerDanger(state, now + t, x, y, BERTH)) return false;
+    const nx = x + move.mx * pace * LOOK_STEP;
+    const ny = y + move.my * pace * LOOK_STEP;
+    if (!isSolid(map, Math.floor(nx + move.mx * 0.3), Math.floor(ny + move.my * 0.3))) {
+      x = nx;
+      y = ny;
+    }
+  }
+  return true;
+}
+
+/** A runner's wrong turns: the branch it is wrongly following, and until when. */
+interface Lost {
+  rng: Rng;
+  /** The tile it was last on, so each fork is considered once per visit. */
+  tile: number;
+  /** The way it is wrongly heading, or null when on track. */
+  wrong: Move | null;
+  until: number;
+  /** Standing still, realising it went wrong. */
+  pauseUntil: number;
+  /** No new wrong turn before this. */
+  calmUntil: number;
+}
+
+/**
+ * Computer players now and then lose track of the route, as people do. At a
+ * fork (a way on that leads further from the target and does not turn back),
+ * with the chance `caution.mistakes`, a runner takes that branch and keeps
+ * going away from its target, for up to `config.bots.wrongSeconds` or until a
+ * dead end; it stops for a moment (`realiseSeconds`), then follows the route
+ * again, which brings it back. Returns the move while it is lost, or null when
+ * on track. Seeded per map and runner, so a race plays out the same each time.
+ */
+function wrongTurn(map: GameMap, caution: Caution, r: Lost, p: { x: number; y: number }, dist: Int32Array, dir: Move): Move | null {
+  const cfg = caution.state.config.bots;
+  const now = obstacleTime(caution.state);
+  const tx = Math.floor(p.x);
+  const ty = Math.floor(p.y);
+  const here = ty * map.width + tx;
+  const cur = dist[here]!;
+  if (now < r.pauseUntil) return STAND;
+  if (cur < 0) return null;
+  /** Open neighbours further from the target, as moves towards their centres. */
+  const away = (): (Move & { tile: number })[] => {
+    const out: (Move & { tile: number })[] = [];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      if (isSolid(map, tx + dx, ty + dy)) continue;
+      const d = dist[(ty + dy) * map.width + tx + dx]!;
+      if (d > cur) out.push({ mx: dx, my: dy, tile: (ty + dy) * map.width + tx + dx });
+    }
+    return out;
+  };
+  if (r.wrong) {
+    const ways = away();
+    if (now >= r.until || ways.length === 0) {
+      // Realises: stops, then the route brings it back.
+      r.wrong = null;
+      r.pauseUntil = now + cfg.realiseSeconds;
+      r.calmUntil = now + cfg.calmSeconds;
+      return STAND;
+    }
+    // Keep on the way it was going, as far as the branch allows.
+    let best = ways[0]!;
+    for (const w of ways) if (w.mx * r.wrong.mx + w.my * r.wrong.my > best.mx * r.wrong.mx + best.my * r.wrong.my) best = w;
+    if (here !== r.tile) {
+      r.tile = here;
+      r.wrong = { mx: best.mx, my: best.my };
+    }
+    const tileX = (best.tile % map.width) + 0.5;
+    const tileY = Math.floor(best.tile / map.width) + 0.5;
+    const len = Math.hypot(tileX - p.x, tileY - p.y) || 1;
+    return { mx: (tileX - p.x) / len, my: (tileY - p.y) / len };
+  }
+  if (here === r.tile) return null;
+  r.tile = here;
+  if (now < r.calmUntil) return null;
+  // A fork: a way further from the target that is not straight back.
+  const forks = away().filter((w) => w.mx * dir.mx + w.my * dir.my > -0.5);
+  if (forks.length === 0 || !r.rng.chance(caution.mistakes!)) return null;
+  const pick = r.rng.pick(forks);
+  r.wrong = { mx: pick.mx, my: pick.my };
+  r.until = now + cfg.wrongSeconds * (0.5 + 0.5 * r.rng.next());
+  return null;
 }
 
 /**

@@ -616,3 +616,38 @@ export function drawInkRunner(
   const shine = at(0, -0.035);
   g.fillStyle(PAPER, 0.35 * alpha).fillCircle(shine.x, shine.y, size * 0.04);
 }
+
+/**
+ * Pips on a landmark's paving ring, at the top: the second landmark of a kind
+ * on a map gets two, the third three, so two plazas of the same kind can be
+ * told apart without their colours. Drawn onto the painted landmark.
+ */
+export function addPips(landmark: HTMLCanvasElement, pips: number, look: Look, tint: number): void {
+  if (pips < 2) return;
+  const g = landmark.getContext('2d')!;
+  const size = landmark.width;
+  const mid = size / 2;
+  const T = size / 5;
+  const radius = look === 'pixel' ? 30 : T * 1.75;
+  for (let i = 0; i < pips; i++) {
+    const a = -Math.PI / 2 + (i - (pips - 1) / 2) * 0.42;
+    const x = mid + Math.cos(a) * radius;
+    const y = mid + Math.sin(a) * radius;
+    if (look === 'pixel') {
+      const px = Math.round(x) - 2;
+      const py = Math.round(y) - 2;
+      g.fillStyle = css(0x0b0a12);
+      g.fillRect(px - 1, py - 1, 6, 6);
+      g.fillStyle = css(shade(tint, 1.15));
+      g.fillRect(px, py, 4, 4);
+    } else {
+      g.fillStyle = css(tint, 0.9);
+      g.strokeStyle = css(INK);
+      g.lineWidth = T * 0.05;
+      g.beginPath();
+      g.arc(x, y, T * 0.14, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
+  }
+}

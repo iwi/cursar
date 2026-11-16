@@ -34,6 +34,7 @@ import {
   LOOK_THEME,
   PIXEL_TILE,
   RED_INK,
+  addPips,
   drawInkRunner,
   inkTileSize,
   paintInkGround,
@@ -42,6 +43,8 @@ import {
   paintPixelLandmark,
   paintPixelRunner,
 } from './looks';
+import { SAFE_PLAZAS, colourSafe, runnerColor } from '../palette';
+import { doorName, doorStyle, shapePoints } from './doors';
 import { CHASER_FRAME, FLAG_DONE, GATE_FRAME, type PropName, paintProp, TURRET_FRAME } from './props';
 
 export interface RaceSceneData {
@@ -89,14 +92,6 @@ function landmarkTipSeen(): boolean {
   }
 }
 
-/** Each door and its key share a colour (and a name, for notices). */
-export const DOOR_STYLE = [
-  { color: 0x4dabff, name: 'blue' },
-  { color: 0xff7a3d, name: 'orange' },
-  { color: 0x7ee08a, name: 'green' },
-  { color: 0xd98cff, name: 'violet' },
-] as const;
-
 /**
  * One colour per plaza. The shape says what kind of landmark it is; the colour
  * tells apart two of the same kind ("the red fountain"). Maps have at most 10
@@ -129,7 +124,8 @@ function colourDistance(a: number, b: number): number {
  * takes the unused colour most unlike the first one's, so the two never look alike.
  */
 function plazaTints(landmarks: readonly Landmark[]): number[] {
-  const free = [...LANDMARK_TINTS];
+  const palette = colourSafe() ? SAFE_PLAZAS : LANDMARK_TINTS;
+  const free = [...palette];
   const firstOfKind = new Map<Landmark['kind'], number>();
   return landmarks.map((mark, i) => {
     const first = firstOfKind.get(mark.kind);
@@ -139,7 +135,7 @@ function plazaTints(landmarks: readonly Landmark[]): number[] {
         if (colourDistance(first, c) > colourDistance(first, free[pick]!)) pick = j;
       });
     }
-    const color = free.splice(pick, 1)[0] ?? LANDMARK_TINTS[i % LANDMARK_TINTS.length]!;
+    const color = free.splice(pick, 1)[0] ?? palette[i % palette.length]!;
     if (first === undefined) firstOfKind.set(mark.kind, color);
     return color;
   });
@@ -284,6 +280,7 @@ export class RaceScene extends Phaser.Scene {
       bridge.on('testEffect', (kind) => driver.testEffect?.(kind)),
       bridge.on('toggleMap', () => this.toggleMap()),
       bridge.on('pick', (slot) => this.pick(slot)),
+      bridge.on('shove', () => (this.pendingShove = true)),
       bridge.on('testPoints', () => driver.testPoints?.()),
       bridge.on('testHurt', () => driver.testHurt?.()),
     );
@@ -379,7 +376,8 @@ export class RaceScene extends Phaser.Scene {
     const down = (action: keyof KeyBindings) => this.keys[action].some((key) => key.isDown);
     const mx = (down('right') ? 1 : 0) - (down('left') ? 1 : 0);
     const my = (down('down') ? 1 : 0) - (down('up') ? 1 : 0);
-    const sprint = down('sprint');
+    const touch = this.data_.bridge.touch;
+    const sprint = down('sprint') || touch.sprint;
     const shove = this.pendingShove && this.state.phase === 'racing';
     this.pendingShove = false;
     const withShove = (intent: MoveIntent): MoveIntent => (shove ? { ...intent, shove: true } : intent);
@@ -387,6 +385,11 @@ export class RaceScene extends Phaser.Scene {
     if (mx !== 0 || my !== 0 || this.state.phase !== 'racing') {
       this.moveTarget = null;
       return withShove({ mx, my, sprint });
+    }
+    // Then the on-screen stick.
+    if (touch.mx !== 0 || touch.my !== 0) {
+      this.moveTarget = null;
+      return withShove({ mx: touch.mx, my: touch.my, sprint });
     }
     if (this.mouseHeld) {
       const pointer = this.input.activePointer;
@@ -490,13 +493,13 @@ export class RaceScene extends Phaser.Scene {
       case 'key':
         if (event.playerId === me.id) {
           audio.key();
-          bridge.emit('notice', `The ${DOOR_STYLE[event.index % DOOR_STYLE.length]!.name} key: its door opens for you`);
+          bridge.emit('notice', `The ${doorName(event.index)} key: its door opens for you`);
         }
         break;
       case 'doorLocked':
         if (event.playerId === me.id) {
           audio.doorLocked();
-          bridge.emit('notice', `Locked: find the ${DOOR_STYLE[event.index % DOOR_STYLE.length]!.name} key`);
+          bridge.emit('notice', `Locked: find the ${doorName(event.index)} key`);
         }
         break;
       case 'offer':
@@ -826,10 +829,14 @@ export class RaceScene extends Phaser.Scene {
     const ground = pixel ? paintPixelGround(map) : paintInkGround(map, T);
     this.add.image(0, 0, texture('ground', ground)).setOrigin(0, 0).setScale(PX / T).setDepth(0);
 
-    // Landmarks: the shape gives the kind, the colour picks out the plaza.
+    // Landmarks: the shape gives the kind, the colour picks out the plaza, and so do pips on a second or third of a kind.
     const tints = plazaTints(map.landmarks);
+    const seen = new Map<Landmark['kind'], number>();
     this.landmarkGfx = map.landmarks.map((mark, i) => {
       const source = pixel ? paintPixelLandmark(mark, tints[i]!) : paintInkLandmark(mark, tints[i]!, T);
+      const nth = (seen.get(mark.kind) ?? 0) + 1;
+      seen.set(mark.kind, nth);
+      addPips(source, nth, this.look, tints[i]!);
       return this.add.image(mark.x * PX, mark.y * PX, texture(`landmark-${i}`, source)).setScale(PX / T).setDepth(1);
     });
   }
@@ -962,7 +969,7 @@ export class RaceScene extends Phaser.Scene {
     for (const track of tracks) {
       const { samples, stride } = track;
       if (samples.length < stride * 2) continue;
-      g.lineStyle(track.width, track.color, track.alpha).beginPath();
+      g.lineStyle(track.width, runnerColor(track.color), track.alpha).beginPath();
       g.moveTo(samples[0]! * PX, samples[1]! * PX);
       for (let i = stride; i + 1 < samples.length; i += stride) g.lineTo(samples[i]! * PX, samples[i + 1]! * PX);
       g.strokePath();
@@ -978,7 +985,7 @@ export class RaceScene extends Phaser.Scene {
     g.clear();
     top.clear();
     const racing = this.racingView();
-    const mine = me.color;
+    const mine = runnerColor(me.color);
     const used = new Set<string>();
     this.propsUsed.clear();
 
@@ -1035,8 +1042,8 @@ export class RaceScene extends Phaser.Scene {
       for (const print of this.driver.rivalPrints()) {
         const fade = 1 - (state.raceTime - print.t) / life;
         if (fade <= 0) continue;
-        if (this.look === 'map') g.fillStyle(print.color, 0.6 * fade).fillCircle(print.x * PX, print.y * PX, 3);
-        else g.fillStyle(print.color, 0.55 * fade).fillRect(Math.round(print.x * PX) - 2, Math.round(print.y * PX) - 2, 4, 4);
+        if (this.look === 'map') g.fillStyle(runnerColor(print.color), 0.6 * fade).fillCircle(print.x * PX, print.y * PX, 3);
+        else g.fillStyle(runnerColor(print.color), 0.55 * fade).fillRect(Math.round(print.x * PX) - 2, Math.round(print.y * PX) - 2, 4, 4);
       }
     }
 
@@ -1054,7 +1061,7 @@ export class RaceScene extends Phaser.Scene {
       const rx = rival.x * PX;
       const ry = rival.y * PX;
       if (rival.safe && this.flickerOff()) continue;
-      this.drawRunner(g, rival.id, rx, ry, rival.facing, rival.color, 1, 1, used);
+      this.drawRunner(g, rival.id, rx, ry, rival.facing, runnerColor(rival.color), 1, 1, used);
       this.drawEffects(top, rx, ry, r, rival.fx.map((kind) => ({ kind, time: 1, total: 1 })));
       let label = this.labels.get(rival.id);
       if (!label) {
@@ -1253,28 +1260,34 @@ export class RaceScene extends Phaser.Scene {
     const whole = !this.racingView() || this.peeking();
     const k = whole ? 1.6 : 1;
     const bob = Math.sin(this.time.now / 400) * 2;
+    // Each door and its key carry their shape as well as their colour.
+    const shape = (pts: { x: number; y: number }[], cx: number, cy: number, r: number) => pts.map((q) => ({ x: cx + q.x * r, y: cy + q.y * r }));
     doors.forEach((door, i) => {
-      const { color } = DOOR_STYLE[i % DOOR_STYLE.length]!;
+      const style = doorStyle(i);
+      const { color } = style;
+      const pts = shapePoints(style.shape);
       const x = door.x * PX;
       const y = door.y * PX;
       const w = door.w * PX;
       const h = door.h * PX;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
       if (me.keys[i]) {
         g.lineStyle(2, color, 0.6).strokeRect(x + 1, y + 1, w - 2, h - 2);
-      } else {
-        g.fillStyle(color, 0.9).fillRect(x, y, w, h);
-        g.lineStyle(2, 0x10131a, 0.8).strokeRect(x + 1, y + 1, w - 2, h - 2);
-        const cx = x + w / 2;
-        const cy = y + h / 2;
-        g.fillStyle(0x10131a, 1).fillCircle(cx, cy - 3, 4).fillTriangle(cx - 3, cy + 7, cx + 3, cy + 7, cx, cy - 2);
+        g.lineStyle(2, color, 0.6).strokePoints(shape(pts, cx, cy, 6), true);
+        return;
       }
-      if (me.keys[i]) return;
-      // The key: a ring, a shaft and two teeth.
+      g.fillStyle(color, 0.9).fillRect(x, y, w, h);
+      g.lineStyle(2, 0x10131a, 0.8).strokeRect(x + 1, y + 1, w - 2, h - 2);
+      g.fillStyle(0x10131a, 1).fillPoints(shape(pts, cx, cy, 8), true);
+      // The key: its bow in the door's shape, a shaft and two teeth.
       const kx = door.key.x * PX;
       const ky = door.key.y * PX + (whole ? 0 : bob);
       g.fillStyle(color, 0.22).fillCircle(kx, ky, PX * 0.5 * k);
-      g.lineStyle(4 * k, color, 1).strokeCircle(kx - 7 * k, ky, 5 * k);
-      g.lineBetween(kx - 2 * k, ky, kx + 11 * k, ky);
+      g.fillStyle(color, 1).fillPoints(shape(pts, kx - 7 * k, ky, 7 * k), true);
+      g.lineStyle(1.5, 0x10131a, 0.9).strokePoints(shape(pts, kx - 7 * k, ky, 7 * k), true);
+      g.lineStyle(4 * k, color, 1);
+      g.lineBetween(kx, ky, kx + 11 * k, ky);
       g.lineBetween(kx + 8 * k, ky, kx + 8 * k, ky + 5 * k);
       g.lineBetween(kx + 11 * k, ky, kx + 11 * k, ky + 6 * k);
     });
@@ -1402,7 +1415,7 @@ export class RaceScene extends Phaser.Scene {
       raceTime: me.finishTime ?? state.raceTime,
       timeLeft: state.deadline - state.raceTime,
       stamina: me.stamina / state.config.sprint.staminaMax,
-      keys: (this.data_.map.doors ?? []).flatMap((_, i) => (me.keys[i] ? [DOOR_STYLE[i % DOOR_STYLE.length]!.color] : [])),
+      keys: (this.data_.map.doors ?? []).flatMap((_, i) => (me.keys[i] ? [i] : [])),
       shoveReady: state.phase === 'racing' && state.raceTime >= state.config.combat.startGraceSeconds && !me.finished && me.shoveCooldown <= 0 && me.stamina >= state.config.combat.staminaCost,
       exhausted: me.exhausted,
       sprinting: me.sprinting,

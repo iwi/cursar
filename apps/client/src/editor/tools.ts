@@ -1,4 +1,5 @@
 import {
+  MAX_DOORS,
   type EnemySpawn,
   type GameMap,
   LANDMARK_KINDS,
@@ -31,12 +32,13 @@ export type ToolId =
   | 'boulder'
   | 'gate'
   | 'barrier'
+  | 'door'
   | 'erase';
 
 export interface ToolInfo {
   id: ToolId;
   label: string;
-  group: 'Ground' | 'Race' | 'Hazards' | 'Enemies' | 'Obstacles' | 'Edit';
+  group: 'Ground' | 'Race' | 'Hazards' | 'Enemies' | 'Obstacles' | 'Doors' | 'Edit';
   hint: string;
 }
 
@@ -57,6 +59,7 @@ export const TOOLS: ToolInfo[] = [
   { id: 'boulder', label: 'Boulder', group: 'Obstacles', hint: 'Click one end of a straight open corridor, then the other end.' },
   { id: 'gate', label: 'Gate', group: 'Obstacles', hint: 'Click an opening between two cells to add or remove a gate.' },
   { id: 'barrier', label: 'Barrier', group: 'Obstacles', hint: 'Click a landmark to put a turning barrier round it (click again: other way, then off). Needs an open plaza.' },
+  { id: 'door', label: 'Door and key', group: 'Doors', hint: 'Click an opening between two cells for a locked door, then a cell for its key (reachable without passing that door). Click a door again to remove it and its key.' },
   { id: 'erase', label: 'Erase', group: 'Edit', hint: 'Click anything placed to remove it.' },
 ];
 
@@ -227,12 +230,48 @@ export function placeBoulder(map: GameMap, a: { c: number; r: number }, b: { c: 
 export function toggleGate(map: GameMap, spot: Spot): string | null {
   if (spot.kind !== 'wall') return 'Gates go in the openings between cells.';
   if (!isOpen(map, spot)) return 'Open this wall first: a gate goes in an opening.';
-  const tiles = wallTiles(spot.c, spot.r, spot.dx, spot.dy);
-  const rect = { x: tiles[0]!.x, y: tiles[0]!.y, w: spot.dx ? 1 : 2, h: spot.dx ? 2 : 1 };
+  const rect = openingRect(spot);
+  if ((map.doors ?? []).some((d) => d.x === rect.x && d.y === rect.y)) return 'There is a door in this opening.';
   const list = (map.obstacles ??= []);
   const i = list.findIndex((o) => o.kind === 'gate' && o.x === rect.x && o.y === rect.y);
   if (i >= 0) list.splice(i, 1);
   else list.push({ kind: 'gate', ...rect, phase: nextPhase(map) });
+  return null;
+}
+
+/** The rectangle of tiles a gate or door fills in an opening. */
+function openingRect(spot: Extract<Spot, { kind: 'wall' }>) {
+  const tiles = wallTiles(spot.c, spot.r, spot.dx, spot.dy);
+  return { x: tiles[0]!.x, y: tiles[0]!.y, w: spot.dx ? 1 : 2, h: spot.dx ? 2 : 1 };
+}
+
+/**
+ * The first click of the door tool, on an opening. Removes the door already
+ * there (with its key), returning `removed`; otherwise checks a door can go
+ * there and returns `ready`, and the key's cell comes next (`placeDoor`).
+ */
+export function startDoor(map: GameMap, spot: Spot): { removed: true } | { ready: true } | { error: string } {
+  if (spot.kind !== 'wall') return { error: 'Doors go in the openings between cells.' };
+  const rect = openingRect(spot);
+  const doors = map.doors ?? [];
+  const i = doors.findIndex((d) => d.x === rect.x && d.y === rect.y);
+  if (i >= 0) {
+    doors.splice(i, 1);
+    if (doors.length === 0) delete map.doors;
+    return { removed: true };
+  }
+  if (!isOpen(map, spot)) return { error: 'Open this wall first: a door goes in an opening.' };
+  if ((map.obstacles ?? []).some((o) => o.kind === 'gate' && o.x === rect.x && o.y === rect.y)) return { error: 'There is a gate in this opening.' };
+  if (doors.length >= MAX_DOORS) return { error: `At most ${MAX_DOORS} doors.` };
+  return { ready: true };
+}
+
+/** The second click of the door tool: the door in `opening`, its key in the middle of cell (c, r). */
+export function placeDoor(map: GameMap, opening: Spot, c: number, r: number): string | null {
+  if (opening.kind !== 'wall') return 'Doors go in the openings between cells.';
+  const key = cellCentre(c, r);
+  if (at(map, { x: Math.floor(key.x), y: Math.floor(key.y) }) === Tile.Wall) return 'The key goes on floor.';
+  (map.doors ??= []).push({ ...openingRect(opening), key });
   return null;
 }
 
@@ -269,6 +308,13 @@ export function eraseAt(map: GameMap, fx: number, fy: number): boolean {
   const foe = enemies.findIndex((e: EnemySpawn) => (e.kind === 'patroller' ? e.path.some((q) => near(q, p, 1.2)) : near(e, p, 1.2)));
   if (foe >= 0) {
     enemies.splice(foe, 1);
+    return true;
+  }
+  const doors = map.doors ?? [];
+  const door = doors.findIndex((d) => near(d.key, p, 1) || (fx >= d.x - 0.3 && fx <= d.x + d.w + 0.3 && fy >= d.y - 0.3 && fy <= d.y + d.h + 0.3));
+  if (door >= 0) {
+    doors.splice(door, 1);
+    if (doors.length === 0) delete map.doors;
     return true;
   }
   const obstacles = map.obstacles ?? [];

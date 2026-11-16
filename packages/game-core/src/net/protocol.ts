@@ -42,13 +42,14 @@ export function pointsForPlace(place: number | null): number {
 }
 
 /**
- * Computer players. They know the map and take the best route, so their level
- * is simply how fast they run, as a share of a runner's normal top speed.
+ * Computer players. They know the map and take the best route; their level is
+ * how fast they run, as a share of a runner's normal top speed, and how often
+ * they lose track and take a wrong branch at a fork (`mistakes`, a chance per fork).
  */
 export const BOT_LEVELS = {
-  easy: { label: 'Easy', speed: 0.45 },
-  normal: { label: 'Normal', speed: 0.6 },
-  hard: { label: 'Hard', speed: 0.8 },
+  easy: { label: 'Easy', speed: 0.45, mistakes: 0.02 },
+  normal: { label: 'Normal', speed: 0.6, mistakes: 0.012 },
+  hard: { label: 'Hard', speed: 0.8, mistakes: 0.006 },
 } as const;
 export type BotLevel = keyof typeof BOT_LEVELS;
 

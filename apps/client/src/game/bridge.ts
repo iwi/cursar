@@ -10,7 +10,7 @@ export interface HudState {
   /** Seconds left before the race is cut off. */
   timeLeft: number;
   stamina: number;
-  /** Colours of the keys the local runner holds. */
+  /** The doors (by index) whose keys the local runner holds. */
   keys: number[];
   /** The shove (Space) can be used now. */
   shoveReady: boolean;
@@ -59,6 +59,15 @@ interface BridgeEvents {
   pick: number;
   /** Tuning panel (solo only): three skill points and a deal of cards, to try them. */
   testPoints: undefined;
+  /** The on-screen shove button (touch screens). */
+  shove: undefined;
+}
+
+/** The on-screen controls of a touch screen, read by the scene every tick: the stick (length up to 1) and the sprint button. */
+export interface TouchInput {
+  mx: number;
+  my: number;
+  sprint: boolean;
 }
 
 type Handler<T> = (payload: T) => void;
@@ -69,6 +78,8 @@ type Handler<T> = (payload: T) => void;
  */
 export class Bridge {
   private handlers = new Map<keyof BridgeEvents, Set<Handler<never>>>();
+  /** Written by the touch controls, read by the scene (too frequent for events). */
+  readonly touch: TouchInput = { mx: 0, my: 0, sprint: false };
 
   on<K extends keyof BridgeEvents>(event: K, handler: Handler<BridgeEvents[K]>): () => void {
     let set = this.handlers.get(event);

@@ -64,6 +64,12 @@ export interface GameConfig {
     /** Other runners' ghosts (from races and files) kept per map. */
     keepOthers: number;
   };
+  /**
+   * Computer players' wrong turns (how often is per level, in `BOT_LEVELS`):
+   * the longest a wrong branch is followed, the pause on realising, and the
+   * time before another wrong turn.
+   */
+  bots: { wrongSeconds: number; realiseSeconds: number; calmSeconds: number };
   /** Moving obstacles. Where they are comes from the map; how they move is set here. */
   obstacles: {
     boulder: { radius: number; speed: number };
@@ -230,6 +236,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
   ghost: { sampleEveryTicks: 3, routeEveryTicks: 6, keepRecent: 5, keepOthers: 20 },
+  bots: { wrongSeconds: 2.5, realiseSeconds: 0.6, calmSeconds: 8 },
   obstacles: {
     boulder: { radius: 0.9, speed: 3 },
     barrier: { armLength: 2, thickness: 0.3, turnSeconds: 4 },
