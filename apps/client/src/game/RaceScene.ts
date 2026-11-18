@@ -44,8 +44,8 @@ import {
   paintPixelRunner,
 } from './looks';
 import { SAFE_PLAZAS, colourSafe, runnerColor } from '../palette';
-import { doorName, doorStyle, shapePoints } from './doors';
-import { CHASER_FRAME, FLAG_DONE, GATE_FRAME, type PropName, paintProp, TURRET_FRAME } from './props';
+import { doorName, doorStyle } from './doors';
+import { BARRIER_FRAME, CHASER_FRAME, DOOR_FRAME, FLAG_DONE, GATE_FRAME, type PropName, TURRET_FRAME, WAYPOINT_FRAMES, doorProp, keyProp, paintProp, waypointProp } from './props';
 
 export interface RaceSceneData {
   map: GameMap;
@@ -75,7 +75,6 @@ const COLOR = {
   finishArrow: 0x7ee08a,
   checkpoint: 0xff4f9a,
   checkpointDone: 0x8a93a6,
-  barrier: 0xe8b04a,
 };
 
 /** A landmark fades while a runner is this close to its centre (tiles). */
@@ -1050,7 +1049,7 @@ export class RaceScene extends Phaser.Scene {
     this.drawTreasures(g);
     this.drawDoors(g);
     this.drawTraps();
-    this.drawObstacles(g);
+    this.drawObstacles();
     this.drawEnemies(g);
 
     // Rivals. In a race the server only sends the ones inside your view.
@@ -1130,10 +1129,9 @@ export class RaceScene extends Phaser.Scene {
       const mx = marker.x * PX;
       const my = marker.y * PX;
       const big = state.phase === 'preview' ? 2.2 : 1;
-      top.lineStyle(3 * big, mine, 1).strokeCircle(mx, my, PX * 0.42 * big);
-      for (let dot = 0; dot <= index; dot++) {
-        top.fillStyle(mine, 1).fillCircle(mx + (dot - index / 2) * 9 * big, my, 3 * big);
-      }
+      // A ring on the ground, and the stake with its foot in the middle (notched once per number).
+      top.lineStyle(2 * big, mine, 0.7).strokeEllipse(mx, my, 18 * big, 8 * big);
+      this.prop(`waypoint-${index}`, waypointProp(mine), Math.min(index, WAYPOINT_FRAMES - 1), mx, my - (PX / 16) * 7 * big, { scale: big, top: true });
     });
 
     // Compass arrows round the runner: next waypoint, and optionally the next objective.
@@ -1249,9 +1247,10 @@ export class RaceScene extends Phaser.Scene {
   }
 
   /**
-   * Doors and keys, in their pair's colour. A door you have no key for is a
-   * solid slab with a keyhole; once you hold its key only its frame shows. A
-   * key you hold is no longer drawn (others still have theirs to pick up).
+   * Doors and keys, in their pair's colour and shape. A door you have no key
+   * for is shut, with a plate showing its shape; once you hold its key only
+   * the doorway shows. A key you hold is no longer drawn (others still have
+   * theirs to pick up).
    */
   private drawDoors(g: Phaser.GameObjects.Graphics): void {
     const doors = this.data_.map.doors;
@@ -1260,36 +1259,26 @@ export class RaceScene extends Phaser.Scene {
     const whole = !this.racingView() || this.peeking();
     const k = whole ? 1.6 : 1;
     const bob = Math.sin(this.time.now / 400) * 2;
-    // Each door and its key carry their shape as well as their colour.
-    const shape = (pts: { x: number; y: number }[], cx: number, cy: number, r: number) => pts.map((q) => ({ x: cx + q.x * r, y: cy + q.y * r }));
     doors.forEach((door, i) => {
-      const style = doorStyle(i);
-      const { color } = style;
-      const pts = shapePoints(style.shape);
-      const x = door.x * PX;
-      const y = door.y * PX;
-      const w = door.w * PX;
-      const h = door.h * PX;
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      if (me.keys[i]) {
-        g.lineStyle(2, color, 0.6).strokeRect(x + 1, y + 1, w - 2, h - 2);
-        g.lineStyle(2, color, 0.6).strokePoints(shape(pts, cx, cy, 6), true);
-        return;
+      const { color, shape } = doorStyle(i);
+      const open = !!me.keys[i];
+      // Drawn tile by tile, lying along its long side, like a gate.
+      const along = door.w >= door.h;
+      const turn = along ? 0 : Math.PI / 2;
+      const n = along ? door.w : door.h;
+      const name = doorProp(color, shape);
+      for (let j = 0; j < n; j++) {
+        const cx = (along ? door.x + j : door.x) + 0.5;
+        const cy = (along ? door.y : door.y + j) + 0.5;
+        this.prop(`door-${i}-${j}`, name, open ? DOOR_FRAME.open : DOOR_FRAME.shut, cx * PX, cy * PX, { turn, snap: 4 });
       }
-      g.fillStyle(color, 0.9).fillRect(x, y, w, h);
-      g.lineStyle(2, 0x10131a, 0.8).strokeRect(x + 1, y + 1, w - 2, h - 2);
-      g.fillStyle(0x10131a, 1).fillPoints(shape(pts, cx, cy, 8), true);
-      // The key: its bow in the door's shape, a shaft and two teeth.
+      const mid = { x: door.x + door.w / 2, y: door.y + door.h / 2 };
+      this.prop(`door-${i}-plate`, name, open ? DOOR_FRAME.plateOpen : DOOR_FRAME.plate, mid.x * PX, mid.y * PX, { scale: open ? 0.7 : 0.8, above: true });
+      if (open) return;
       const kx = door.key.x * PX;
       const ky = door.key.y * PX + (whole ? 0 : bob);
       g.fillStyle(color, 0.22).fillCircle(kx, ky, PX * 0.5 * k);
-      g.fillStyle(color, 1).fillPoints(shape(pts, kx - 7 * k, ky, 7 * k), true);
-      g.lineStyle(1.5, 0x10131a, 0.9).strokePoints(shape(pts, kx - 7 * k, ky, 7 * k), true);
-      g.lineStyle(4 * k, color, 1);
-      g.lineBetween(kx, ky, kx + 11 * k, ky);
-      g.lineBetween(kx + 8 * k, ky, kx + 8 * k, ky + 5 * k);
-      g.lineBetween(kx + 11 * k, ky, kx + 11 * k, ky + 6 * k);
+      this.prop(`key-${i}`, keyProp(color, shape), 0, kx, ky, { scale: k });
     });
   }
 
@@ -1302,7 +1291,7 @@ export class RaceScene extends Phaser.Scene {
    * Moving obstacles. During a race only what is inside your view is drawn:
    * moving things are never remembered.
    */
-  private drawObstacles(g: Phaser.GameObjects.Graphics): void {
+  private drawObstacles(): void {
     const { state } = this;
     const { config } = state;
     const t = obstacleTime(state);
@@ -1315,17 +1304,19 @@ export class RaceScene extends Phaser.Scene {
         const a = o.ax === o.bx ? along : -along;
         this.prop(`boulder-${i}`, 'boulder', 0, b.x * PX, b.y * PX, { turn: a, snap: 16, scale: config.obstacles.boulder.radius / 0.9 });
       } else if (o.kind === 'barrier') {
+        // The arm in lengths of about a tile, each drawn where it is in view, with a tip at each end.
         const [a, b] = barrierEnds(config, o, t);
-        const steps = 10;
-        g.lineStyle(config.obstacles.barrier.thickness * PX, COLOR.barrier, 1);
-        for (let i = 0; i < steps; i++) {
-          const x0 = a.x + ((b.x - a.x) * i) / steps;
-          const y0 = a.y + ((b.y - a.y) * i) / steps;
-          const x1 = a.x + ((b.x - a.x) * (i + 1)) / steps;
-          const y1 = a.y + ((b.y - a.y) * (i + 1)) / steps;
-          if (this.isVisibleTile((x0 + x1) / 2, (y0 + y1) / 2)) g.lineBetween(x0 * PX, y0 * PX, x1 * PX, y1 * PX);
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        const n = Math.max(2, Math.round(len));
+        for (let j = 0; j < n; j++) {
+          const mx = a.x + ((b.x - a.x) * (j + 0.5)) / n;
+          const my = a.y + ((b.y - a.y) * (j + 0.5)) / n;
+          if (!this.isVisibleTile(mx, my)) continue;
+          const frame = j === 0 || j === n - 1 ? BARRIER_FRAME.tip : BARRIER_FRAME.arm;
+          this.prop(`barrier-${i}-${j}`, 'barrier', frame, mx * PX, my * PX, { turn: j === 0 ? angle + Math.PI : angle, snap: 64, scale: len / n });
         }
-        if (this.isVisibleTile(o.x, o.y)) g.fillStyle(0x10131a, 1).fillCircle(o.x * PX, o.y * PX, 5);
+        if (this.isVisibleTile(o.x, o.y)) this.prop(`barrier-${i}-hub`, 'barrier', BARRIER_FRAME.hub, o.x * PX, o.y * PX, { scale: 0.8, above: true });
       } else {
         // Drawn tile by tile, lying along its long side, with a post at each end.
         const frame = gateClosed(config, o, t) ? GATE_FRAME.closed : GATE_FRAME.open;

@@ -1,13 +1,33 @@
 import type { TrapKind } from '@cursar/game-core';
 import { TRAP_STYLE } from './effects';
+import { type DoorShape, shapePoints } from './doors';
 import { INK, type Look, shade } from './looks';
 
 /**
  * Sprites for the things on the map, in each look: checkpoint flags, coins,
- * boulders, patrollers, chasers, turrets and their bolts, gates and traps. Each is a strip of frames, drawn
- * facing right (+x) where it has a facing, so the scene can turn it.
+ * boulders, patrollers, chasers, turrets and their bolts, gates, barriers,
+ * doors and their keys, traps and waypoint flags. Each is a strip of frames,
+ * drawn facing right (+x) where it has a facing, so the scene can turn it.
+ * Doors, keys and waypoints are painted in a colour carried in the name (see
+ * `doorProp`, `keyProp`, `waypointProp`).
  */
-export type PropName = 'flag' | 'coin' | 'boulder' | 'patroller' | 'chaser' | 'turret' | 'gate' | `trap-${TrapKind}`;
+export type PropName =
+  | 'flag'
+  | 'coin'
+  | 'boulder'
+  | 'patroller'
+  | 'chaser'
+  | 'turret'
+  | 'gate'
+  | 'barrier'
+  | `trap-${TrapKind}`
+  | `door-${string}-${DoorShape}`
+  | `key-${string}-${DoorShape}`
+  | `waypoint-${string}`;
+
+export const doorProp = (color: number, shape: DoorShape): PropName => `door-${color.toString(16)}-${shape}`;
+export const keyProp = (color: number, shape: DoorShape): PropName => `key-${color.toString(16)}-${shape}`;
+export const waypointProp = (color: number): PropName => `waypoint-${color.toString(16)}`;
 
 export interface PropSheet {
   canvas: HTMLCanvasElement;
@@ -29,6 +49,19 @@ export const TURRET_FRAME = { base: 0, head: 1, charging: 2, bolt: 3 } as const;
  * crossing it in y): closed, open, and the post at either end.
  */
 export const GATE_FRAME = { closed: 0, open: 1, post: 2 } as const;
+/**
+ * Barrier frames, one tile each, lying along x: a length of arm, the arm's
+ * end (its tip to the right) and the hub it turns on.
+ */
+export const BARRIER_FRAME = { arm: 0, tip: 1, hub: 2 } as const;
+/**
+ * Door frames, one tile each, lying along x like a gate: the shut door, the
+ * open doorway, and the plate with the door's shape (shut and open), drawn
+ * once at its middle.
+ */
+export const DOOR_FRAME = { shut: 0, open: 1, plate: 2, plateOpen: 3 } as const;
+/** Waypoint frames: the first, second and third waypoint (one to three notches). */
+export const WAYPOINT_FRAMES = 3;
 
 const PINK = 0xff4f9a;
 const SHEETS: Record<string, { frames: number; tiles: number }> = {
@@ -40,13 +73,28 @@ const SHEETS: Record<string, { frames: number; tiles: number }> = {
   turret: { frames: 4, tiles: 1 },
   gate: { frames: 3, tiles: 1 },
   trap: { frames: 1, tiles: 1 },
+  barrier: { frames: 3, tiles: 1 },
+  door: { frames: 4, tiles: 1 },
+  key: { frames: 1, tiles: 1 },
+  waypoint: { frames: WAYPOINT_FRAMES, tiles: 1 },
 };
 
+/** What a painter needs beyond the frame: the trap kind, or the colour and shape of a door, key or waypoint. */
+interface Vars {
+  trap: TrapKind | null;
+  color: number;
+  shape: DoorShape;
+}
+
 export function paintProp(look: Look, name: PropName): PropSheet {
-  const base = name.startsWith('trap-') ? 'trap' : name;
+  const [base, a, b] = name.split('-') as [string, string?, string?];
   const { frames, tiles } = SHEETS[base]!;
-  const trap = base === 'trap' ? (name.slice(5) as TrapKind) : null;
-  return look === 'pixel' ? pixelProp(base, trap, frames, tiles) : inkProp(base, trap, frames, tiles);
+  const vars: Vars = {
+    trap: base === 'trap' ? (a as TrapKind) : null,
+    color: base === 'trap' || a === undefined ? 0xffffff : parseInt(a, 16),
+    shape: (b as DoorShape | undefined) ?? 'circle',
+  };
+  return look === 'pixel' ? pixelProp(base, vars, frames, tiles) : inkProp(base, vars, frames, tiles);
 }
 
 const css = (c: number, alpha = 1) => `rgba(${c >> 16},${(c >> 8) & 255},${c & 255},${alpha})`;
@@ -66,9 +114,11 @@ type Pen = {
   rect: (x: number, y: number, w: number, h: number, c: number) => void;
   line: (x0: number, y0: number, x1: number, y1: number, c: number) => void;
   has: (x: number, y: number) => boolean;
+  /** Fills a polygon (pixel centres inside it). */
+  poly: (pts: { x: number; y: number }[], c: number) => void;
 };
 
-function pixelProp(base: string, trap: TrapKind | null, frames: number, tiles: number): PropSheet {
+function pixelProp(base: string, vars: Vars, frames: number, tiles: number): PropSheet {
   const S = 16 * tiles;
   const c = sheetCanvas(S, frames);
   const g = c.getContext('2d')!;
@@ -92,8 +142,23 @@ function pixelProp(base: string, trap: TrapKind | null, frames: number, tiles: n
         for (let i = 0; i <= n; i++) set(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n, col);
       },
       has: (x, y) => grid[y]?.[x] != null,
+      poly: (pts, col) => {
+        for (let y = 0; y < S; y++) {
+          for (let x = 0; x < S; x++) {
+            const qx = x + 0.5;
+            const qy = y + 0.5;
+            let inside = false;
+            for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+              const a = pts[i]!;
+              const b = pts[j]!;
+              if (a.y > qy !== b.y > qy && qx < ((b.x - a.x) * (qy - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+            }
+            if (inside) set(x, y, col);
+          }
+        }
+      },
     };
-    const outline = PIXEL_PAINT[base]!(f, pen, trap);
+    const outline = PIXEL_PAINT[base]!(f, pen, vars);
     for (let y = 0; y < S; y++) {
       for (let x = 0; x < S; x++) {
         const col = grid[y]![x];
@@ -108,7 +173,7 @@ function pixelProp(base: string, trap: TrapKind | null, frames: number, tiles: n
 }
 
 /** Each painter draws one frame and returns its outline colour (or null for none). */
-const PIXEL_PAINT: Record<string, (f: number, p: Pen, trap: TrapKind | null) => number | null> = {
+const PIXEL_PAINT: Record<string, (f: number, p: Pen, v: Vars) => number | null> = {
   flag: (f, p) => {
     p.line(4, 2, 4, 13, 0xe8e4dc);
     p.rect(3, 14, 3, 1, 0x6a6470);
@@ -246,7 +311,96 @@ const PIXEL_PAINT: Record<string, (f: number, p: Pen, trap: TrapKind | null) => 
     p.rect(0, 11, 16, 2, 0x8a93a6);
     return 0x10131a;
   },
-  trap: (_f, p, trap) => {
+  barrier: (f, p) => {
+    if (f === BARRIER_FRAME.hub) {
+      // An iron hub with a bolt in the middle.
+      p.disc(8, 8, 4.6, 0x3a4252);
+      p.disc(7.4, 7.4, 2.6, 0x5d6a80);
+      p.rect(7, 7, 2, 2, 0xc9d2e3);
+      return 0x10131a;
+    }
+    // A pole in hazard stripes (period 8, so lengths join up), 5 pixels thick.
+    const end = f === BARRIER_FRAME.tip ? 13 : 16;
+    for (let y = 6; y <= 10; y++) {
+      for (let x = 0; x < end; x++) {
+        const stripe = ((x + y) >> 2) & 1;
+        p.set(x, y, stripe ? 0x2a2630 : 0xe8b04a);
+      }
+    }
+    if (f === BARRIER_FRAME.tip) {
+      // A rounded end with a red reflector.
+      p.rect(13, 7, 1, 3, 0xe8b04a);
+      p.rect(11, 7, 2, 3, 0xe0483a);
+    }
+    for (let x = 0; x < end; x++) p.set(x, 6, ((x + 6) >> 2) & 1 ? 0x4a4450 : 0xffd27a);
+    return 0x10131a;
+  },
+  door: (f, p, { color, shape }) => {
+    if (f === DOOR_FRAME.open) {
+      // The empty doorway: its frame in the door's colour on either side.
+      p.rect(0, 0, 16, 2, shade(color, 0.55));
+      p.rect(0, 14, 16, 2, shade(color, 0.55));
+      for (const x of [0, 5, 10, 15]) {
+        p.set(x, 1, 0x10131a);
+        p.set(x, 14, 0x10131a);
+      }
+      return null;
+    }
+    if (f === DOOR_FRAME.plate || f === DOOR_FRAME.plateOpen) {
+      const pts = shapePoints(shape).map((q) => ({ x: 8 + q.x * 4.6, y: 8 + q.y * 4.6 }));
+      if (f === DOOR_FRAME.plateOpen) {
+        // Only the shape's outline, in the slot.
+        p.poly(pts, color);
+        p.poly(shapePoints(shape).map((q) => ({ x: 8 + q.x * 2.6, y: 8 + q.y * 2.6 })), 0x15161d);
+        return 0x10131a;
+      }
+      // An iron plate carrying the door's shape, with a keyhole below it.
+      p.disc(8, 8, 7.2, 0x2a2f3a);
+      p.disc(7.4, 7.4, 6.2, 0x3a4252);
+      p.poly(pts, shade(color, 1.25));
+      return 0x10131a;
+    }
+    // Shut: boards running across the doorway, bound with two iron bands.
+    for (let x = 0; x < 16; x++) {
+      const board = Math.floor(x / 4);
+      const seam = x % 4 === 3;
+      const col = seam ? shade(color, 0.45) : shade(color, [0.95, 0.82, 1, 0.88][board]!);
+      p.rect(x, 0, 1, 16, col);
+    }
+    for (let x = 0; x < 16; x += 4) p.set(x + 1, 2 + (x % 8 ? 9 : 4), shade(color, 1.25));
+    for (const y of [3, 11]) {
+      p.rect(0, y, 16, 2, 0x3a4050);
+      p.rect(0, y, 16, 1, 0x5a6272);
+      for (const x of [2, 6, 10, 14]) p.set(x, y + 1, 0x9aa4b8);
+    }
+    p.rect(0, 0, 16, 1, 0x10131a);
+    p.rect(0, 15, 16, 1, 0x10131a);
+    return null;
+  },
+  key: (_f, p, { color, shape }) => {
+    // The bow in the door's shape (with a hole), a shaft and two teeth.
+    const bow = shapePoints(shape);
+    p.poly(bow.map((q) => ({ x: 5 + q.x * 4.4, y: 8 + q.y * 4.4 })), color);
+    p.poly(bow.map((q) => ({ x: 5 + q.x * 1.6, y: 8 + q.y * 1.6 })), shade(color, 0.4));
+    p.rect(9, 8, 6, 1, color);
+    p.set(12, 9, color);
+    p.rect(14, 9, 1, 2, color);
+    p.set(3, 6, shade(color, 1.45));
+    return 0x10131a;
+  },
+  waypoint: (f, p, { color }) => {
+    // A stake with a pennant in your colour, notched once per waypoint number. Its foot is the waypoint.
+    p.line(8, 1, 8, 14, 0xe8e4dc);
+    p.set(8, 15, 0x8a8478);
+    for (let y = 1; y <= 8; y++) {
+      const len = Math.round(7 * (1 - Math.abs(y - 4.5) / 4));
+      for (let i = 1; i <= len; i++) p.set(8 + i, y, y >= 5 ? shade(color, 0.75) : color);
+    }
+    for (let n = 0; n <= f; n++) p.rect(9 + n * 2, 4, 1, 2, 0x10131a);
+    p.rect(6, 15, 5, 1, 0x3a3640);
+    return 0x10131a;
+  },
+  trap: (_f, p, { trap }) => {
     const col = TRAP_STYLE[trap!].color;
     // A stone plate with a rim in the trap's colour.
     p.rect(2, 2, 12, 12, 0x2b2d38);
@@ -302,7 +456,7 @@ const PIXEL_PAINT: Record<string, (f: number, p: Pen, trap: TrapKind | null) => 
 
 const S_INK = 64;
 
-function inkProp(base: string, trap: TrapKind | null, frames: number, tiles: number): PropSheet {
+function inkProp(base: string, vars: Vars, frames: number, tiles: number): PropSheet {
   const S = S_INK * tiles;
   const c = sheetCanvas(S, frames);
   const g = c.getContext('2d')!;
@@ -316,7 +470,7 @@ function inkProp(base: string, trap: TrapKind | null, frames: number, tiles: num
     g.translate(f * S, 0);
     // Drawn in tile units: one unit is one tile.
     g.scale(S_INK, S_INK);
-    INK_PAINT[base]!(f, g, trap);
+    INK_PAINT[base]!(f, g, vars);
     g.restore();
   }
   return { canvas: c, frame: S, frames, tiles };
@@ -336,7 +490,7 @@ function blob(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, wo
   g.closePath();
 }
 
-const INK_PAINT: Record<string, (f: number, g: CanvasRenderingContext2D, trap: TrapKind | null) => void> = {
+const INK_PAINT: Record<string, (f: number, g: CanvasRenderingContext2D, v: Vars) => void> = {
   flag: (f, g) => {
     g.strokeStyle = ink();
     g.lineWidth = 3 * W;
@@ -634,7 +788,189 @@ const INK_PAINT: Record<string, (f: number, g: CanvasRenderingContext2D, trap: T
     }
     g.stroke();
   },
-  trap: (_f, g, trap) => {
+  barrier: (f, g) => {
+    g.strokeStyle = ink();
+    if (f === BARRIER_FRAME.hub) {
+      g.fillStyle = 'rgba(90,100,120,0.85)';
+      g.beginPath();
+      g.arc(0.5, 0.5, 0.26, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 2.5 * W;
+      g.stroke();
+      g.lineWidth = 2 * W;
+      g.beginPath();
+      g.arc(0.5, 0.5, 0.08, 0, Math.PI * 2);
+      g.stroke();
+      return;
+    }
+    // A pole washed amber, striped across in ink (period 0.25, so lengths join up), between two inked edges.
+    const end = f === BARRIER_FRAME.tip ? 0.84 : 1;
+    g.fillStyle = 'rgba(232,176,74,0.75)';
+    g.beginPath();
+    if (f === BARRIER_FRAME.tip) {
+      g.moveTo(0, 0.35);
+      g.lineTo(end - 0.15, 0.35);
+      g.arc(end - 0.15, 0.5, 0.15, -Math.PI / 2, Math.PI / 2);
+      g.lineTo(0, 0.65);
+    } else g.rect(0, 0.35, 1, 0.3);
+    g.fill();
+    g.save();
+    g.clip();
+    g.strokeStyle = ink(0.7);
+    g.lineWidth = 7 * W;
+    g.beginPath();
+    for (let x = -0.25; x < 1.1; x += 0.25) {
+      g.moveTo(x, 0.65);
+      g.lineTo(x + 0.18, 0.35);
+    }
+    g.stroke();
+    g.restore();
+    g.lineWidth = 2.5 * W;
+    g.beginPath();
+    if (f === BARRIER_FRAME.tip) {
+      g.moveTo(0, 0.35);
+      g.lineTo(end - 0.15, 0.35);
+      g.arc(end - 0.15, 0.5, 0.15, -Math.PI / 2, Math.PI / 2);
+      g.lineTo(0, 0.65);
+    } else {
+      g.moveTo(0, 0.35);
+      g.lineTo(1, 0.35);
+      g.moveTo(0, 0.65);
+      g.lineTo(1, 0.65);
+    }
+    g.stroke();
+  },
+  door: (f, g, { color, shape }) => {
+    g.strokeStyle = ink();
+    const pts = shapePoints(shape);
+    const trace = (cx: number, cy: number, r: number) => {
+      g.beginPath();
+      pts.forEach((q, i) => (i ? g.lineTo(cx + q.x * r, cy + q.y * r) : g.moveTo(cx + q.x * r, cy + q.y * r)));
+      g.closePath();
+    };
+    if (f === DOOR_FRAME.open) {
+      // The doorway's two jambs, dashed, in the door's colour.
+      g.strokeStyle = css(color, 0.85);
+      g.lineWidth = 3 * W;
+      g.setLineDash([0.12, 0.08]);
+      g.beginPath();
+      for (const y of [0.08, 0.92]) {
+        g.moveTo(0, y);
+        g.lineTo(1, y);
+      }
+      g.stroke();
+      g.setLineDash([]);
+      return;
+    }
+    if (f === DOOR_FRAME.plate || f === DOOR_FRAME.plateOpen) {
+      if (f === DOOR_FRAME.plateOpen) {
+        trace(0.5, 0.5, 0.24);
+        g.strokeStyle = css(color, 0.9);
+        g.lineWidth = 4 * W;
+        g.stroke();
+        return;
+      }
+      // A round plate of parchment carrying the door's shape.
+      g.fillStyle = 'rgba(244,236,214,0.95)';
+      g.beginPath();
+      g.arc(0.5, 0.5, 0.4, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 2.5 * W;
+      g.stroke();
+      trace(0.5, 0.5, 0.26);
+      g.fillStyle = css(color, 1);
+      g.fill();
+      g.lineWidth = 2 * W;
+      g.stroke();
+      return;
+    }
+    // Shut: boards washed in the door's colour, two bands across and inked edges.
+    g.fillStyle = css(color, 0.6);
+    g.fillRect(0, 0.04, 1, 0.92);
+    g.lineWidth = 1.5 * W;
+    g.strokeStyle = ink(0.45);
+    g.beginPath();
+    for (const x of [0.25, 0.5, 0.75]) {
+      g.moveTo(x, 0.06);
+      g.lineTo(x + 0.01, 0.94);
+    }
+    g.stroke();
+    g.strokeStyle = ink(0.8);
+    g.lineWidth = 3.5 * W;
+    g.beginPath();
+    for (const y of [0.24, 0.76]) {
+      g.moveTo(0, y);
+      g.lineTo(1, y);
+    }
+    g.stroke();
+    g.strokeStyle = ink();
+    g.lineWidth = 2.5 * W;
+    g.beginPath();
+    for (const y of [0.04, 0.96]) {
+      g.moveTo(0, y);
+      g.lineTo(1, y);
+    }
+    g.stroke();
+  },
+  key: (_f, g, { color, shape }) => {
+    g.strokeStyle = ink();
+    const pts = shapePoints(shape);
+    g.beginPath();
+    pts.forEach((q, i) => (i ? g.lineTo(0.3 + q.x * 0.22, 0.5 + q.y * 0.22) : g.moveTo(0.3 + q.x * 0.22, 0.5 + q.y * 0.22)));
+    g.closePath();
+    g.fillStyle = css(color, 0.9);
+    g.fill();
+    g.lineWidth = 2.5 * W;
+    g.stroke();
+    g.beginPath();
+    g.arc(0.3, 0.5, 0.06, 0, Math.PI * 2);
+    g.stroke();
+    // Shaft and teeth: the colour under an inked line.
+    g.strokeStyle = css(color, 1);
+    g.lineWidth = 6 * W;
+    g.beginPath();
+    g.moveTo(0.5, 0.5);
+    g.lineTo(0.92, 0.5);
+    g.moveTo(0.72, 0.5);
+    g.lineTo(0.72, 0.64);
+    g.moveTo(0.86, 0.5);
+    g.lineTo(0.86, 0.68);
+    g.stroke();
+    g.strokeStyle = ink();
+    g.lineWidth = 2 * W;
+    g.stroke();
+  },
+  waypoint: (f, g, { color }) => {
+    // A stake with a pennant in your colour, notched once per waypoint number. Its foot is the waypoint.
+    g.strokeStyle = ink();
+    g.lineWidth = 3 * W;
+    g.beginPath();
+    g.moveTo(0.5, 0.92);
+    g.lineTo(0.5, 0.08);
+    g.stroke();
+    g.lineWidth = 2 * W;
+    g.beginPath();
+    g.moveTo(0.38, 0.92);
+    g.lineTo(0.62, 0.92);
+    g.stroke();
+    g.fillStyle = css(color, 0.8);
+    g.beginPath();
+    g.moveTo(0.5, 0.08);
+    g.lineTo(0.94, 0.27);
+    g.lineTo(0.5, 0.46);
+    g.closePath();
+    g.fill();
+    g.lineWidth = 2.5 * W;
+    g.stroke();
+    g.lineWidth = 3 * W;
+    g.beginPath();
+    for (let n = 0; n <= f; n++) {
+      g.moveTo(0.58 + n * 0.09, 0.22);
+      g.lineTo(0.58 + n * 0.09, 0.32);
+    }
+    g.stroke();
+  },
+  trap: (_f, g, { trap }) => {
     const col = TRAP_STYLE[trap!].color;
     // A plate drawn on the ground, washed in the trap's colour, with its sign in ink.
     g.fillStyle = css(col === 0xffffff ? 0xb8b0a0 : col, 0.35);
