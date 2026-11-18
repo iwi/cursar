@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_CONFIG, type GameEvent, type PlayerInput, applyEffect, createRace, damage, generateMap, isSolid, skipPreview, step,
+  DEFAULT_CONFIG, type GameEvent, GhostRecorder, type PlayerInput, applyEffect, createRace, damage, generateMap, isSolid, skipPreview, splitRoute, step,
 } from '../src';
 import { mapFromText } from './helpers';
 
@@ -55,6 +55,31 @@ describe('health and respawning', () => {
     expect([me.vx, me.vy]).toEqual([0, 0]);
     expect(me.health).toBe(DEFAULT_CONFIG.health.hearts);
     expect(me.effects).toEqual([]);
+  });
+
+  it('a recorded route splits at the respawn jump, from where the runner fell to where they came back', () => {
+    const state = startRacing();
+    const me = state.players[0]!;
+    const start = { x: me.x, y: me.y };
+    const recorder = new GhostRecorder(state, 'p1');
+    const go = (seconds: number) => {
+      for (let i = 0; i < Math.round(seconds * state.config.tickRate); i++) {
+        step(state, { p1: input(1, 0) });
+        recorder.capture();
+      }
+    };
+    go(1);
+    const fell = { x: me.x, y: me.y };
+    hurt(state, 5);
+    go(0.5);
+    const split = splitRoute(recorder.track, 3, state.config.ghost.jumpTiles);
+    expect(split.runs).toHaveLength(2);
+    expect(split.jumps).toHaveLength(1);
+    const [jump] = split.jumps;
+    expect(Math.hypot(jump!.from.x - fell.x, jump!.from.y - fell.y)).toBeLessThan(0.5);
+    expect(Math.hypot(jump!.to.x - start.x, jump!.to.y - start.y)).toBeLessThan(0.5);
+    // Running alone never counts as a jump, even at full speed.
+    expect(splitRoute(recorder.track.slice(0, split.runs[0]!.length * 3), 3, state.config.ghost.jumpTiles).jumps).toEqual([]);
   });
 
   it('a big hit can take several hearts at once', () => {

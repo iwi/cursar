@@ -59,3 +59,31 @@ export function routeDistance(route: readonly number[]): number {
   }
   return total;
 }
+
+/** A route cut at its respawn jumps: the stretches actually run, and each jump (from where the runner fell to where they came back). */
+export interface SplitRoute {
+  runs: { x: number; y: number }[][];
+  jumps: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+}
+
+/**
+ * Splits a route of samples (`stride` numbers each, x and y first) at its
+ * respawn jumps, moves longer than `jumpTiles` between two samples.
+ */
+export function splitRoute(samples: readonly number[], stride: number, jumpTiles: number): SplitRoute {
+  const out: SplitRoute = { runs: [], jumps: [] };
+  let run: { x: number; y: number }[] = [];
+  for (let i = 0; i + 1 < samples.length; i += stride) {
+    const point = { x: samples[i]!, y: samples[i + 1]! };
+    const last = run[run.length - 1];
+    if (last && Math.hypot(point.x - last.x, point.y - last.y) > jumpTiles) {
+      out.runs.push(run);
+      out.jumps.push({ from: last, to: point });
+      run = [];
+    }
+    run.push(point);
+  }
+  if (run.length) out.runs.push(run);
+  return out;
+}
+

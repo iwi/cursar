@@ -21,6 +21,7 @@ import {
   obstacleTime,
   patrollerPose,
   patrollerPosition,
+  splitRoute,
   trapArmed,
 } from '@cursar/game-core';
 import { ENEMY_LABEL, EFFECT_STYLE, TRAP_STYLE } from './effects';
@@ -30,6 +31,7 @@ import type { Bridge } from './bridge';
 import type { MoveIntent, RaceDriver, Track } from './driver';
 import { DEFAULT_BINDINGS, type KeyBindings } from './input';
 import {
+  INK,
   type Look,
   LOOK_THEME,
   PIXEL_TILE,
@@ -144,6 +146,9 @@ export class RaceScene extends Phaser.Scene {
   private data_!: RaceSceneData;
   private driver!: RaceDriver;
   private routesDrawn = false;
+  /** Where you fell this race (tiles), marked on the ground, and where you were last frame, to know it. */
+  private falls: { x: number; y: number }[] = [];
+  private lastPos: { x: number; y: number } | null = null;
   private autopilot: ReturnType<typeof createAutopilot> | null = null;
   /** Mouse movement: where the runner is heading (tiles), and whether the button is held. */
   private moveTarget: { x: number; y: number } | null = null;
@@ -357,6 +362,7 @@ export class RaceScene extends Phaser.Scene {
     this.updateCamera(x, y, dt);
     this.updateFog(dt);
     this.drawEntities(x, y);
+    this.lastPos = { x, y };
     this.fadeLandmarks(dt, x, y);
 
     if (this.frame++ % 2 === 0) this.emitHud();
@@ -520,7 +526,10 @@ export class RaceScene extends Phaser.Scene {
         }
         break;
       case 'respawn':
-        if (event.playerId === me.id) audio.respawn();
+        if (event.playerId === me.id) {
+          audio.respawn();
+          if (this.lastPos) this.falls.push(this.lastPos);
+        }
         break;
       case 'effectResisted':
         if (event.playerId === me.id) audio.resisted();
@@ -962,16 +971,52 @@ export class RaceScene extends Phaser.Scene {
     }
   }
 
-  /** After the race: the routes taken, drawn over the revealed map. */
+  /**
+   * After the race: the routes taken, drawn over the revealed map. A respawn
+   * is drawn apart from the running: a cross where the runner fell and a
+   * dashed line to where they came back.
+   */
   private drawRoutes(tracks: Track[]): void {
     const g = this.add.graphics().setDepth(5);
+    const jumpTiles = this.state.config.ghost.jumpTiles;
     for (const track of tracks) {
       const { samples, stride } = track;
       if (samples.length < stride * 2) continue;
-      g.lineStyle(track.width, runnerColor(track.color), track.alpha).beginPath();
-      g.moveTo(samples[0]! * PX, samples[1]! * PX);
-      for (let i = stride; i + 1 < samples.length; i += stride) g.lineTo(samples[i]! * PX, samples[i + 1]! * PX);
-      g.strokePath();
+      const color = runnerColor(track.color);
+      const { runs, jumps } = splitRoute(samples, stride, jumpTiles);
+      for (const run of runs) {
+        if (run.length < 2) continue;
+        g.lineStyle(track.width, color, track.alpha).beginPath();
+        g.moveTo(run[0]!.x * PX, run[0]!.y * PX);
+        for (const point of run.slice(1)) g.lineTo(point.x * PX, point.y * PX);
+        g.strokePath();
+      }
+      for (const { from, to } of jumps) {
+        this.dashedLine(g, from.x * PX, from.y * PX, to.x * PX, to.y * PX, track.width * 0.75, color, track.alpha * 0.8);
+        this.drawFall(g, from.x * PX, from.y * PX, color, 2, track.alpha);
+      }
+    }
+  }
+
+  private dashedLine(g: Phaser.GameObjects.Graphics, x0: number, y0: number, x1: number, y1: number, width: number, color: number, alpha: number): void {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const dash = 12;
+    const gap = 9;
+    g.lineStyle(width, color, alpha);
+    for (let d = 0; d < len; d += dash + gap) {
+      const e = Math.min(len, d + dash);
+      g.lineBetween(x0 + ((x1 - x0) * d) / len, y0 + ((y1 - y0) * d) / len, x0 + ((x1 - x0) * e) / len, y0 + ((y1 - y0) * e) / len);
+    }
+  }
+
+  /** A cross where a runner fell (ran out of hearts), in their colour with a dark edge. */
+  private drawFall(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, k: number, alpha = 1): void {
+    const r = 6 * k;
+    const edge = this.look === 'map' ? INK : 0x10131a;
+    for (const [width, col] of [[6 * k, edge], [3 * k, color]] as const) {
+      g.lineStyle(width, col, alpha);
+      g.lineBetween(x - r, y - r, x + r, y + r);
+      g.lineBetween(x - r, y + r, x + r, y - r);
     }
   }
 
@@ -1122,6 +1167,12 @@ export class RaceScene extends Phaser.Scene {
     for (const [id, sprite] of this.sprites) if (!used.has(id)) sprite.setVisible(false);
     for (const [slot, img] of this.props) if (!this.propsUsed.has(slot)) img.setVisible(false);
     this.drawYou(top, x, y, r * scale);
+
+    // Where you fell, so you can find your way back past it (shown through the fog, like waypoints; after the race the routes show it).
+    if (state.phase !== 'finished') {
+      const k = !racing || this.peeking() ? 2.5 : 1;
+      for (const fall of this.falls) this.drawFall(top, fall.x * PX, fall.y * PX, mine, k);
+    }
 
     // Waypoint flags (the player's own notes, so they show through the fog).
     me.markers.forEach((marker, index) => {

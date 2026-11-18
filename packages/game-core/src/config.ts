@@ -59,6 +59,12 @@ export interface GameConfig {
     sampleEveryTicks: number;
     /** The server records each runner's route every N ticks (6 at 60 Hz = 100 ms); routes can be saved as ghosts. */
     routeEveryTicks: number;
+    /**
+     * Between two samples of a route, a move longer than this (tiles) is a
+     * respawn jump, not running (a shove, the fastest move, covers 1.4 tiles in
+     * a server route's 100 ms).
+     */
+    jumpTiles: number;
     /** Your own finished runs kept per map, besides your best and any you pin. */
     keepRecent: number;
     /** Other runners' ghosts (from races and files) kept per map. */
@@ -235,7 +241,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   markers: { max: 3, reachRadius: 1.5 },
   footprints: { lifetimeSeconds: 20, max: 80 },
-  ghost: { sampleEveryTicks: 3, routeEveryTicks: 6, keepRecent: 5, keepOthers: 20 },
+  ghost: { sampleEveryTicks: 3, routeEveryTicks: 6, jumpTiles: 2.5, keepRecent: 5, keepOthers: 20 },
   bots: { wrongSeconds: 2.5, realiseSeconds: 0.6, calmSeconds: 8 },
   obstacles: {
     boulder: { radius: 0.9, speed: 3 },
