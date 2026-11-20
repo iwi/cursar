@@ -1,4 +1,5 @@
 import { Tile } from '@cursar/game-core';
+import { Music, type MusicMood } from './Music';
 
 interface ToneOptions {
   freq: number;
@@ -31,9 +32,14 @@ interface NoiseOptions {
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Gameplay cues and music have their own volumes, both under the master (mute). */
+  private cues: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private music: Music | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private muted = false;
   private volume = 0.7;
+  private musicVolume = 0.5;
   private stepSide = 1;
 
   /** Browsers only allow audio after a click or key press: call this from one. */
@@ -45,35 +51,47 @@ export class AudioEngine {
       this.master = this.ctx.createGain();
       const limiter = this.ctx.createDynamicsCompressor();
       this.master.connect(limiter).connect(this.ctx.destination);
+      this.cues = this.ctx.createGain();
+      this.cues.connect(this.master);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.connect(this.master);
       const length = this.ctx.sampleRate;
       this.noiseBuffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      this.music = new Music(this.ctx, this.musicBus, this.noiseBuffer);
       this.applyVolume();
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
-  setMuted(muted: boolean): void {
-    this.muted = muted;
-    this.applyVolume();
-  }
-
-  setVolume(volume: number): void {
-    this.volume = volume;
+  /** Sound on or off, and the volumes (0 to 1) of the cues and of the music. */
+  configure(settings: { muted: boolean; volume: number; musicVolume: number }): void {
+    this.muted = settings.muted;
+    this.volume = settings.volume;
+    this.musicVolume = settings.musicVolume;
     this.applyVolume();
   }
 
   private applyVolume(): void {
-    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
+    if (!this.master || !this.cues || !this.musicBus) return;
+    this.master.gain.value = this.muted ? 0 : 1;
+    this.cues.gain.value = this.volume;
+    // Full music volume still sits under the cues.
+    this.musicBus.gain.value = this.musicVolume * 0.8;
+  }
+
+  /** Tells the race music what is going on; see `Music`. */
+  mood(mood: MusicMood): void {
+    this.music?.set(mood);
   }
 
   private output(pan: number | undefined): AudioNode | null {
-    if (!this.ctx || !this.master) return null;
-    if (!pan) return this.master;
+    if (!this.ctx || !this.cues) return null;
+    if (!pan) return this.cues;
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = Math.max(-1, Math.min(1, pan));
-    panner.connect(this.master);
+    panner.connect(this.cues);
     return panner;
   }
 

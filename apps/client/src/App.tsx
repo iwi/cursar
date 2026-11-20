@@ -40,15 +40,13 @@ export function App() {
     const next = { ...settings, ...patch };
     setSettings(next);
     saveSettings(next);
-    audio.setMuted(next.muted);
-    audio.setVolume(next.volume);
+    audio.configure(next);
     return next;
   };
 
   const unlockAudio = (from: Settings) => {
     audio.unlock();
-    audio.setMuted(from.muted);
-    audio.setVolume(from.volume);
+    audio.configure(from);
   };
 
   /** Races the chosen map: a saved hand-made one, or the generated one for the seed and size. */
@@ -172,6 +170,8 @@ export function App() {
         onLook={(look) => update({ look })}
         colourSafe={settings.colourSafe}
         onColourSafe={(colourSafe) => update({ colourSafe })}
+        settings={settings}
+        onChange={update}
       />
     );
   }

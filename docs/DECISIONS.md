@@ -139,8 +139,14 @@ Agreed for later phases:
 - **Enemy signatures.** Each enemy type has its own sound that is audible before it is visible: a patroller's regular steps, a chaser's growl that rises when it has picked you, a turret's whir before it fires.
 - **Trap tells.** Armed traps make a faint sound at very close range. The trap-detection skill makes it louder and earlier.
 - **Dynamic obstacles.** Rolling boulders rumble with a pitch shift as they pass. Rotating barriers click on a rhythm you can time.
-- **Adaptive music.** A quiet base layer, with layers added when you are in the lead, when someone is close behind, and in the final stretch.
-- **Settings.** Separate volumes for effects and music, and a visual alternative for each important cue so the game does not depend on hearing.
+- **Adaptive music: built 20 November** (`audio/Music.ts`, synthesised like the cues). A four-bar loop in A minor at 96 beats a minute with four layers that fade in and out, so the music itself tells you something:
+  - **Base:** a soft pad, always on during the race, quieter under the preview and countdown (and while paused). It fades out when you finish or the race ends.
+  - **Progress:** a bass line that grows with the share of checkpoints you have touched.
+  - **Close:** a ticking hi-hat and a dissonant stab while a rival is near enough to hear (the same footsteps you already hear; in solo, the ghost). It fades over 3 s of silence and is held off for the first 5 s, when everyone is still together.
+  - **Final stretch:** a kick drum and an arpeggio, with the tempo easing up to 112, once the finish is open for you or 30 s or less are left.
+  
+  This replaces "a layer when you are in the lead": in network play a runner is never told where the others stand, so the music could not know without leaking it. The music is kept low, behind a soft filter and below the pitch of the cues (beacon, chimes), so it never hides them.
+- **Settings: built 20 November.** Sound on or off, with separate volumes for the gameplay sounds (default 70%) and the music (default 50%; 0 turns it off). Full music volume still sits under the cues. The sliders are on the entry screen, in the solo menu and in the room; the sounds slider plays a sample when you let go. Still to do: a visual alternative for each important cue, so the game does not depend on hearing.
 
 ## 4. Technical decisions
 

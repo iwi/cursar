@@ -1,3 +1,4 @@
+import { SoundSettings } from './SoundSettings';
 import { DEFAULT_CONFIG, type GameMap, MAP_SIZES, type MapSize, generateMap, previewSeconds } from '@cursar/game-core';
 import { useMemo, useState } from 'react';
 import { audio } from '../audio/AudioEngine';
@@ -166,10 +167,7 @@ export function Menu({ settings, onChange, onStart, onBack, onEditor, onStats }:
           <input type="checkbox" checked={settings.mouseMove} onChange={(event) => onChange({ mouseMove: event.target.checked })} />
           <span>Move with the mouse <small>(click or hold to run towards the pointer; right click stops)</small></span>
         </label>
-        <label className="check">
-          <input type="checkbox" checked={!settings.muted} onChange={(event) => onChange({ muted: !event.target.checked })} />
-          <span>Sound</span>
-        </label>
+        <SoundSettings settings={settings} onChange={onChange} />
 
         <button type="submit" className="primary">Start solo race</button>
         <div className="actions">

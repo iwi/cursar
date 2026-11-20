@@ -174,6 +174,8 @@ export class RaceScene extends Phaser.Scene {
   private camY = 0;
   /** The full map is open (M): the runner stands still while the others carry on. */
   private mapOpen = false;
+  /** The last rival (or ghost) footstep heard: how near it was and when (scene time, ms). */
+  private heard = { closeness: 0, at: -Infinity };
   /** 0 = race view, 1 = full map; eased between them. */
   private mapBlend = 0;
   private lookX = 0;
@@ -296,6 +298,7 @@ export class RaceScene extends Phaser.Scene {
 
   private cleanup(onBlur: () => void): void {
     window.removeEventListener('blur', onBlur);
+    this.data_.audio.mood({ mode: 'off', progress: 0, close: 0, final: false });
     this.unsubscribe.forEach((off) => off());
     this.unsubscribe = [];
     this.driver.destroy();
@@ -347,6 +350,7 @@ export class RaceScene extends Phaser.Scene {
     this.mapBlend += ((this.mapOpen ? 1 : 0) - this.mapBlend) * Math.min(1, dt * 8);
     if (Math.abs(this.mapBlend - (this.mapOpen ? 1 : 0)) < 0.01) this.mapBlend = this.mapOpen ? 1 : 0;
     if (this.racingView() && !driver.paused && this.state.resumeTime === 0) this.ambientAudio(dt);
+    this.musicMood();
     if (this.overview()) {
       if (this.finishedAt < 0) this.finishedAt = this.time.now;
       if (!this.routesDrawn && this.state.phase === 'finished') {
@@ -536,8 +540,38 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'rivalStep':
         audio.rivalStep(event.pan, event.closeness);
+        this.hear(event.closeness);
         break;
     }
+  }
+
+  private hear(closeness: number): void {
+    const now = this.time.now;
+    // A nearer step wins; otherwise the latest one sets the level.
+    if (closeness >= this.heardCloseness(now) || now - this.heard.at > 600) this.heard = { closeness, at: now };
+  }
+
+  /** How near the last heard rival was, fading out over 3 s of silence. */
+  private heardCloseness(now: number): number {
+    const silence = now - this.heard.at;
+    return silence >= 3000 ? 0 : this.heard.closeness * (1 - silence / 3000);
+  }
+
+  /** Tells the music what the race is like for you: see `Music`. */
+  private musicMood(): void {
+    const { state } = this;
+    const me = this.me();
+    const done = me.checkpoints.filter(Boolean).length;
+    const total = me.checkpoints.length;
+    const racing = this.racingView() && !this.driver.paused;
+    const mode = racing ? 'race' : (state.phase === 'preview' || state.phase === 'countdown' || this.driver.paused) && !this.overview() ? 'preview' : 'off';
+    this.data_.audio.mood({
+      mode,
+      progress: total > 0 ? done / total : 1,
+      // Everyone starts together, so rivals heard in the first seconds mean nothing yet.
+      close: state.raceTime < 5 ? 0 : this.heardCloseness(this.time.now),
+      final: (total > 0 && done === total) || state.deadline - state.raceTime <= 30,
+    });
   }
 
   /** Sounds that depend on where you are rather than on a single event. */
@@ -580,7 +614,10 @@ export class RaceScene extends Phaser.Scene {
       if (this.ghostStride >= state.config.player.strideLength) {
         this.ghostStride = 0;
         const dist = Math.hypot(g.x - me.x, g.y - me.y);
-        if (dist < 9) audio.rivalStep((g.x - me.x) / 5, 1 - dist / 9);
+        if (dist < 9) {
+          audio.rivalStep((g.x - me.x) / 5, 1 - dist / 9);
+          this.hear(1 - dist / 9);
+        }
       }
     }
     this.ghostLast = g;

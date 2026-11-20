@@ -1,4 +1,6 @@
 import { LOOKS, type Look } from '../game/looks';
+import type { Settings } from '../storage';
+import { SoundSettings } from './SoundSettings';
 
 interface Props {
   onSolo: () => void;
@@ -12,10 +14,12 @@ interface Props {
   onLook: (look: Look) => void;
   colourSafe: boolean;
   onColourSafe: (on: boolean) => void;
+  settings: Settings;
+  onChange: (patch: Partial<Settings>) => void;
 }
 
 /** The entry screen: what to play. Every option is chosen on the next screen. */
-export function Home({ onSolo, onMultiplayer, onEditor, onStats, onTutorial, tutorialSeen, look, onLook, colourSafe, onColourSafe }: Props) {
+export function Home({ onSolo, onMultiplayer, onEditor, onStats, onTutorial, tutorialSeen, look, onLook, colourSafe, onColourSafe, settings, onChange }: Props) {
   return (
     <main className="menu">
       <div className="menu-card home">
@@ -63,6 +67,7 @@ export function Home({ onSolo, onMultiplayer, onEditor, onStats, onTutorial, tut
           <input type="checkbox" checked={colourSafe} onChange={(event) => onColourSafe(event.target.checked)} />
           <span>Colour-blind friendly colours <small>(runners, plazas, doors and keys; doors and keys also carry shapes)</small></span>
         </label>
+        <SoundSettings settings={settings} onChange={onChange} />
         <div className="home-links">
           <button type="button" className="link" onClick={onStats}>Statistics</button>
           {tutorialSeen && <button type="button" className="link" onClick={onTutorial}>Tutorial</button>}

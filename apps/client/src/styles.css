@@ -67,6 +67,12 @@ legend, .field > span { padding: 0; margin-bottom: 8px; font-weight: 600; displa
 .facts dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .check { display: flex; gap: 10px; align-items: center; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.sound { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.volume { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.volume input { width: 110px; accent-color: var(--accent); }
+.volume output { min-width: 3.2em; font-variant-numeric: tabular-nums; color: var(--text); }
+.volume.off { opacity: 0.5; }
+.home .sound { justify-content: center; }
 .menu-card .primary { padding: 14px; font-size: 18px; }
 .menu-card .secondary { padding: 12px; font-size: 16px; border-color: var(--accent); color: var(--accent); }
 .menu-card h2, .menu-card h3 { margin: 0 0 8px; }

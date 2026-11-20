@@ -1,3 +1,4 @@
+import { SoundSettings } from './SoundSettings';
 import { runnerColor } from '../palette';
 import {
   BOT_LEVELS,
@@ -49,8 +50,7 @@ export function Multiplayer(props: Props) {
   useEffect(() => {
     const unlock = () => {
       audio.unlock();
-      audio.setMuted(props.settings.muted);
-      audio.setVolume(props.settings.volume);
+      audio.configure(props.settings);
     };
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
@@ -416,6 +416,7 @@ function Lobby({ room, connection, settings, onChange, onExit, reconnecting }: L
               <input type="checkbox" checked={settings.mouseMove} onChange={(event) => onChange({ mouseMove: event.target.checked })} />
               <span>Move with the mouse <small>(click or hold to run towards the pointer; right click stops)</small></span>
             </label>
+            <SoundSettings settings={settings} onChange={onChange} />
           </section>
         )}
 

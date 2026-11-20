@@ -15,7 +15,10 @@ export interface Settings {
   /** During the race, click (or hold) to run towards the pointer. */
   mouseMove: boolean;
   muted: boolean;
+  /** Volume of the gameplay sounds, 0 to 1. */
   volume: number;
+  /** Volume of the race music, 0 to 1 (0 turns it off). */
+  musicVolume: number;
   /** Name and colour used in network play (the colour is also your runner's in single player). */
   name: string;
   color: number;
@@ -25,7 +28,7 @@ export interface Settings {
   colourSafe: boolean;
 }
 
-const DEFAULTS: Settings = { size: 'small', seed: '', doors: 0, finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, name: '', color: 0xffb000, look: 'pixel', colourSafe: false };
+const DEFAULTS: Settings = { size: 'small', seed: '', doors: 0, finishArrow: false, mapId: '', vimKeys: false, mouseMove: false, muted: false, volume: 0.7, musicVolume: 0.5, name: '', color: 0xffb000, look: 'pixel', colourSafe: false };
 const SETTINGS_KEY = 'cursar.settings';
 
 // Storage can be unavailable (private windows, blocked site data): the game must still run.
@@ -60,6 +63,9 @@ export function loadSettings(): Settings {
   const loaded = { ...DEFAULTS, ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) };
   if (!isLook(loaded.look)) loaded.look = DEFAULTS.look;
   loaded.colourSafe = loaded.colourSafe === true;
+  const unit = (value: unknown, fallback: number) => (typeof value === 'number' && value >= 0 && value <= 1 ? value : fallback);
+  loaded.volume = unit(loaded.volume, DEFAULTS.volume);
+  loaded.musicVolume = unit(loaded.musicVolume, DEFAULTS.musicVolume);
   return loaded;
 }
 
