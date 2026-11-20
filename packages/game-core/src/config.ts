@@ -280,7 +280,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     steadyMul: 0.5,
     reveal: { seconds: 5, range: 8 },
   },
-  combat: { reach: 1.2, arc: 1.2, staminaCost: 25, cooldownSeconds: 1.5, startGraceSeconds: 5, activeSeconds: 0.3, knockSpeed: 14, rivalStunSeconds: 0.5, chaserStunSeconds: 1.5 },
+  combat: { reach: 1.6, arc: 1.2, staminaCost: 25, cooldownSeconds: 1.5, startGraceSeconds: 5, activeSeconds: 0.3, knockSpeed: 14, rivalStunSeconds: 0.5, chaserStunSeconds: 1.5 },
   threat: { trapReachPerThreat: 0.05, trapReachMax: 0.3, wakeRangePerThreat: 0.5, wakeRangeMax: 3 },
   health: { hearts: 3, respawnSafeSeconds: 2 },
   effects: {
